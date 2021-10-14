@@ -220,30 +220,52 @@ bool intersectRayWithShape(const Sphere& sphere, Ray& ray, HitInfo& hitInfo)
     return false;
 }
 
-/*
-TODO
-*/
+
 bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray)
 {
-    bool hit = false;
+    // using txmin = (xmin - ox) / dx as an example to find all six sides of the box - lecture slides
+    // X components
+    float tXMin = (box.lower.x - ray.origin.x) / ray.direction.x;
+    float tXMax = (box.upper.x - ray.origin.x) / ray.direction.x;
+    // Y componeneets
+    float tYMin = (box.lower.y - ray.origin.y) / ray.direction.y;
+    float tYMax = (box.upper.y - ray.origin.y) / ray.direction.y;
+    // Z component
+    float tZMin = (box.lower.z - ray.origin.z) / ray.direction.z;
+    float tZMax = (box.upper.z - ray.origin.z) / ray.direction.z;
 
-    //float x0 = box.lower.x, y0 = box.lower.y, z0 = box.lower.z, x1 = box.upper.x, y1 = box.upper.y, z1 = box.upper.z;
 
-    //hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z0 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x0,y0,z1 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z0 }, glm::vec3{ x0,y0,z1 }, glm::vec3{ x1,y0,z0 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z0 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x1,y0,z0 }, ray);
+    // tXIn = min(txmin, txmax) ---- tXOut = max(txmin,txmax) --- lecture slides
+    // X componenets
+    float tXIn = std::min(tXMin, tXMax);
+    float tXOut = std::max(tXMin, tXMax);
+    // Y
+    float tYIn = std::min(tYMin, tYMax);
+    float tYOut = std::max(tYMin, tYMax);
+    // Z
+    float tZIn = std::min(tZMin, tZMax);
+    float tZOut = std::max(tZMin, tZMax);
 
-    //hit |= intersectRayWithTriangle(glm::vec3{ x0,y1,z1 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x0,y0,z1 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x1,y0,z1 }, glm::vec3{ x0,y0,z1 }, glm::vec3{ x1,y0,z0 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z0 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x1,y0,z0 }, ray);
+    // finding global in and out -- lecture slides
+    float tIn = std::max(tXIn, std::max(tYIn, tZIn));
+    float tOut = std::min(tXOut, std::min(tYOut, tZOut));
 
-    //hit |= intersectRayWithTriangle(glm::vec3{ x0,y1,z1 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x1,y1,z0 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x1,y0,z1 }, glm::vec3{ x1,y1,z0 }, glm::vec3{ x1,y0,z0 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z1 }, glm::vec3{ x0,y1,z1 }, glm::vec3{ x1,y0,z1 }, ray);
+    // ray misses -- no intersection conditions
+    if (tIn > tOut || tOut < 0) {
+        return false;
+    }
 
-    //hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z1 }, glm::vec3{ x0,y1,z1 }, glm::vec3{ x1,y0,z1 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z1 }, glm::vec3{ x1,y0,z1 }, glm::vec3{ x1,y1,z0 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z1 }, glm::vec3{ x0,y1,z1 }, glm::vec3{ x1,y1,z0 }, ray);
 
-    return hit;
+    // there is an intersection of ray and AABB
+    if (tIn < ray.t) {
+        // if the intersection is behind the origin of the ray, then update ray.t as tOut
+        if (tIn < 0) {
+            ray.t = tOut;
+        }
+        else {
+            // else the intersection is infront. update ray.t as tIn (where the ray hits the box) and return true
+            ray.t = tIn;
+        }
+    }
+    return true;
 }
