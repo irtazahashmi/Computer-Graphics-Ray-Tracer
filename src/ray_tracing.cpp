@@ -149,7 +149,11 @@ bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const gl
                 return false;
             }
             //If needed we update the ray.t value to get the smallest positive t value
-            ray.t = glm::min(ray.t, (plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal)));
+            //ray.t = glm::min(ray.t, (plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal)));
+            if (ray.t > (plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal))) {
+                ray.t = (plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal));
+                hitInfo.normal = plane.normal;
+            }
             return true;
         }
     }

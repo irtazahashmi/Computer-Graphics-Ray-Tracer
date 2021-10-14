@@ -40,6 +40,41 @@ enum class ViewMode {
     RayTracing = 1
 };
 
+static glm::vec3 diffuseOnly(PointLight pointlight, HitInfo hitInfo, Ray ray) {
+    glm::vec3 lightPos = pointlight.position;
+    glm::vec3 color = pointlight.color;
+    glm::vec3 hitPos = ray.origin + ray.t * ray.direction;
+
+    glm::vec3 lightDir = lightPos - hitPos;
+    glm::vec3 normalizedNormal = glm::normalize(hitInfo.normal);
+    lightDir = glm::normalize(lightDir);
+
+    float dotProductNormailLightVector = glm::dot(normalizedNormal, lightDir);
+
+    if (dotProductNormailLightVector > 0) {
+        glm::vec3 diffuse = hitInfo.material.kd * dotProductNormailLightVector;
+        diffuse.x *= color.x;
+        diffuse.y *= color.y;
+        diffuse.z *= color.z;
+        return diffuse;
+    }
+    return glm::vec3{ 0,0,0 };
+}
+
+static glm::vec3 phongSpecular(HitInfo hitInfo, Ray ray, PointLight pointlight) {
+    glm::vec3 ans{};
+    glm::vec3 lightPos = pointlight.position;
+    glm::vec3 color = pointlight.color;
+    glm::vec3 hitPos = ray.origin + ray.t * ray.direction;
+
+    glm::vec3 lightVector = lightPos - hitPos;
+    lightVector = glm::normalize(lightVector);
+    glm::vec3 H = 2 * glm::dot(lightVector, glm::normalize(hitInfo.normal)) * glm::normalize(hitInfo.normal) - lightVector;
+
+    ans = glm::pow(glm::max(glm::dot(glm::normalize(hitInfo.normal), glm::normalize(H)), 0.f), hitInfo.material.shininess) * hitInfo.material.ks;
+
+    return ans;
+}
 
 static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray)
 {
@@ -47,8 +82,27 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
     if (bvh.intersect(ray, hitInfo)) {
         // Draw a white debug ray if the ray hits.
         drawRay(ray, glm::vec3(1.0f));
+
+        glm::vec3 ans{ 0,0,0 };
+
+        for (const auto& light : scene.lights) {
+            if (std::holds_alternative<PointLight>(light)) {
+                const PointLight pointlight = std::get<PointLight>(light);
+
+                ans += diffuseOnly(pointlight, hitInfo, ray);
+                ans += phongSpecular(hitInfo, ray, pointlight);
+                
+            } else if (std::holds_alternative<SegmentLight>(light)) {
+                const SegmentLight segmentlight = std::get<SegmentLight>(light);
+                // perform your calculations for a segment light.
+            } else if (std::holds_alternative<ParallelogramLight>(light)) {
+                const ParallelogramLight parallelogramlight = std::get<ParallelogramLight>(light);
+                // perform your calculations for a parallelogram light.
+            }
+        }
+
         // Set the color of the pixel to white if the ray hits.
-        return glm::vec3(1.0f);
+        return ans;
     } else {
         // Draw a red debug ray if the ray missed.
         drawRay(ray, glm::vec3(1.0f, 0.0f, 0.0f));
