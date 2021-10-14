@@ -99,14 +99,24 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
             } else if (std::holds_alternative<SegmentLight>(light)) {
                 const SegmentLight segmentlight = std::get<SegmentLight>(light);
                 
-                const PointLight pointlightOne = { segmentlight.endpoint0, segmentlight.color0 };
-                const PointLight pointlightTwo = { segmentlight.endpoint1, segmentlight.color1 };
+                int sampleSize = 100;
+                float alpha = 0.01f;
 
-                finalColor += diffuseOnly(pointlightOne, hitInfo, ray);
-                finalColor += phongSpecular(pointlightOne, hitInfo, ray);
+                glm::vec3 lightZeroPos = segmentlight.endpoint0;
+                glm::vec3 lightOnePos = segmentlight.endpoint1;
+                glm::vec3 lightZeroColor = segmentlight.color0;
+                glm::vec3 lightOneColor = segmentlight.color1;
 
-                finalColor += diffuseOnly(pointlightTwo, hitInfo, ray);
-                finalColor += phongSpecular(pointlightTwo, hitInfo, ray);
+                glm::vec3 x = (lightOnePos - lightZeroPos) / (float) sampleSize;
+            
+                glm::vec3 currColor { 0.f };
+                for (int i = 0; i < sampleSize; i++) {
+                    glm::vec3 currPos = lightZeroPos + (float) i * x;
+                    currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor) * alpha;
+                    PointLight currPointLight = { currPos, currColor };
+                    finalColor += diffuseOnly(currPointLight, hitInfo, ray);
+                    finalColor += phongSpecular(currPointLight, hitInfo, ray);
+                }
 
             } else if (std::holds_alternative<ParallelogramLight>(light)) {
                 const ParallelogramLight parallelogramlight = std::get<ParallelogramLight>(light);

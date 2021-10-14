@@ -11,50 +11,9 @@ DISABLE_WARNINGS_POP()
 #include <limits>
 
 /*
-* Calculates the length of a vector.
+* Checks whether a given point is inside a given triangle.
 * 
-* Using the Pythagorean theorem for two points in a 3-dimensional space
-* 
-* @param the vector
-* @return the length of the vector
-*/
-float lengthV(const glm::vec3& v) {
-    return glm::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-}
-
-/*
-* Calculates the area of the triangle
-* 
-* Using the answer given to the following StackExchange question
-* https://math.stackexchange.com/questions/128991/how-to-calculate-the-area-of-a-3d-triangle
-* 
-* @param 3 vectors, indicating the 3 points (vertices of the triangle)
-* @return the area of the triangle as a float (we assume that such triangles exists so no need for further checks)
-*/
-float areaOfTriangle(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2) {
-    //Daclaring the answer variable
-    float ans;
-
-    //Use the lengthV() to obtain |AB||AC|
-    ans = lengthV(v1 - v0) * lengthV(v2 - v0);
-
-    //calculating the cosine of the angle (a) from the definition of the dot product
-    float theta = glm::dot(v1 - v0, v2 - v0) / ans;
-
-    /*
-    returning the final result(area)
-    Note here, glm::sqrt(1 - theta * theta) calculates the sine of the angle 
-    by rewritting sin^2(x) + cos^2(x) = 1 -> sin(x) = sqrt( 1 - cos^2(x) )
-    then applying the given formula
-    */
-    return 0.5f * ans * glm::sqrt(1 - theta * theta);
-}
-
-/*
-* Checks whether a given point is inside a given triangle
-* 
-* By using the equation of the barycentric coordinates that uses the areas of the sub-triangles
-* which was given during the lecture
+* This is done by finding whether the point p lies inside the edges of the triangle.
 * 
 * @param 3 vectors, indicating the 3 vartices of the triangle, 1 vector indicating the point we want to check
 *           and the normal of the triangle
@@ -62,18 +21,28 @@ float areaOfTriangle(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& 
 */
 bool pointInTriangle(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& n, const glm::vec3& p)
 {
-    // a,b,c are the 3 parts of the given equation respectevly
-    float a = areaOfTriangle(v1, v2, p) / areaOfTriangle(v0, v1, v2);
-    float b = areaOfTriangle(v0, v2, p) / areaOfTriangle(v0, v1, v2);
-    float c = areaOfTriangle(v0, v1, p) / areaOfTriangle(v0, v1, v2);
+    // The three edges of the triangle
+    glm::vec3 triangleEdgeOne = v1 - v0;
+    glm::vec3 traingleEdgeTwo = v2 - v1;
+    glm::vec3 triangleEdgeThree = v0 - v2;
 
-    /*
-    * In order for the point to be considered inside the triangle
-    * a+b+c must be equal to one (+- error margin) also a,b,c must be non negatives
-    */
-    if (a >= 0.f && b >= 0.f && c >= 0.f && glm::abs(a + b + c - 1.0f) <= 1e-3) {
+    // The point relative to triangle edges
+    glm::vec3 trianglePointOne = p - v0;
+    glm::vec3 trianglePointTwo = p - v1;
+    glm::vec3 trianglePointThree = p - v2;
+
+    // checking if the point p is inside all three edges of the triangle
+    float insideEdgeOne = glm::dot(n, glm::cross(triangleEdgeOne, trianglePointOne));
+    float insideEdgeTwo = glm::dot(n, glm::cross(traingleEdgeTwo, trianglePointTwo));
+    float insideEdgeThree = glm::dot(n, glm::cross(triangleEdgeThree, trianglePointThree));
+
+    // point p inside the trianlge conditions
+    if (insideEdgeOne >= 0 && insideEdgeTwo >= 0 && insideEdgeThree >= 0) {
+        // point p inside triangle
         return true;
     }
+
+    // point p outside the triangle
     return false;
 }
 
