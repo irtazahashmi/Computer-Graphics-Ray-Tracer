@@ -63,8 +63,8 @@ static glm::vec3 diffuseOnly(PointLight pointlight, HitInfo hitInfo, Ray ray) {
     return glm::vec3{ 0,0,0 };
 }
 
-static glm::vec3 phongSpecular(HitInfo hitInfo, Ray ray, PointLight pointlight) {
-    glm::vec3 specular {};
+static glm::vec3 phongSpecular(PointLight pointlight, HitInfo hitInfo, Ray ray) {
+    glm::vec3 specular {0.0f};
     glm::vec3 lightPos = pointlight.position;
     glm::vec3 lightColor = pointlight.color;
     glm::vec3 hitPos = ray.origin + ray.t * ray.direction;
@@ -77,7 +77,7 @@ static glm::vec3 phongSpecular(HitInfo hitInfo, Ray ray, PointLight pointlight) 
     glm::vec3 H = 2 * glm::dot(lightVector, normalizedNormal) * normalizedNormal - lightVector;
     H = glm::normalize(H);
 
-    specular = glm::pow(glm::max(glm::dot(normalizedNormal, H), 0.f), hitInfo.material.shininess) * hitInfo.material.ks;
+    specular = glm::pow(glm::max(glm::dot(normalizedNormal, H), 0.0f), hitInfo.material.shininess) * hitInfo.material.ks;
     return specular;
 }
 
@@ -85,18 +85,16 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
 {
     HitInfo hitInfo;
     if (bvh.intersect(ray, hitInfo)) {
-        // Draw a white debug ray if the ray hits.
-        drawRay(ray, glm::vec3(1.0f));
-
-        glm::vec3 ans{ 0,0,0 };
+  
+        glm::vec3 finalColor{ 0,0,0 };
 
         for (const auto& light : scene.lights) {
 
             if (std::holds_alternative<PointLight>(light)) {
                 const PointLight pointlight = std::get<PointLight>(light);
 
-                ans += diffuseOnly(pointlight, hitInfo, ray);
-                ans += phongSpecular(hitInfo, ray, pointlight);
+                finalColor += diffuseOnly(pointlight, hitInfo, ray);
+                finalColor += phongSpecular(pointlight, hitInfo, ray);
                 
             } else if (std::holds_alternative<SegmentLight>(light)) {
                 const SegmentLight segmentlight = std::get<SegmentLight>(light);
@@ -104,11 +102,11 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
                 const PointLight pointlightOne = { segmentlight.endpoint0, segmentlight.color0 };
                 const PointLight pointlightTwo = { segmentlight.endpoint1, segmentlight.color1 };
 
-                ans += diffuseOnly(pointlightOne, hitInfo, ray);
-                ans += phongSpecular(hitInfo, ray, pointlightOne);
+                finalColor += diffuseOnly(pointlightOne, hitInfo, ray);
+                finalColor += phongSpecular(pointlightOne, hitInfo, ray);
 
-                ans += diffuseOnly(pointlightTwo, hitInfo, ray);
-                ans += phongSpecular(hitInfo, ray, pointlightTwo);
+                finalColor += diffuseOnly(pointlightTwo, hitInfo, ray);
+                finalColor += phongSpecular(pointlightTwo, hitInfo, ray);
 
             } else if (std::holds_alternative<ParallelogramLight>(light)) {
                 const ParallelogramLight parallelogramlight = std::get<ParallelogramLight>(light);
@@ -118,21 +116,23 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
                 const PointLight pointlightTwo = { parallelogramlight.v0 + parallelogramlight.edge02, parallelogramlight.color2 };
                 const PointLight pointlightThree = { parallelogramlight.v0 + parallelogramlight.edge01 + parallelogramlight.edge02, parallelogramlight.color3 };
 
-                ans += diffuseOnly(pointlightZero, hitInfo, ray);
-                ans += phongSpecular(hitInfo, ray, pointlightZero);
+                finalColor += diffuseOnly(pointlightZero, hitInfo, ray);
+                finalColor += phongSpecular(pointlightZero, hitInfo, ray);
 
-                ans += diffuseOnly(pointlightOne, hitInfo, ray);
-                ans += phongSpecular(hitInfo, ray, pointlightOne);
+                finalColor += diffuseOnly(pointlightOne, hitInfo, ray);
+                finalColor += phongSpecular(pointlightOne, hitInfo, ray);
 
-                ans += diffuseOnly(pointlightTwo, hitInfo, ray);
-                ans += phongSpecular(hitInfo, ray, pointlightTwo);
+                finalColor += diffuseOnly(pointlightTwo, hitInfo, ray);
+                finalColor += phongSpecular(pointlightTwo, hitInfo, ray);
 
-                ans += diffuseOnly(pointlightThree, hitInfo, ray);
-                ans += phongSpecular(hitInfo, ray, pointlightThree);
+                finalColor += diffuseOnly(pointlightThree, hitInfo, ray);
+                finalColor += phongSpecular(pointlightThree, hitInfo, ray);
             }
         }
 
-        return ans;
+        // drawing the camera ray using final color
+        drawRay(ray, finalColor);
+        return finalColor;
     } else {
         // Draw a red debug ray if the ray missed.
         drawRay(ray, glm::vec3(1.0f, 0.0f, 0.0f));
