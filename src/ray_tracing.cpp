@@ -158,6 +158,38 @@ bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const gl
 }
 
 /*
+* Same function as before but there is no hitInfo as parameter
+*
+* @param 3 vectors representing the 3 vertices of the triangle, the ray
+* @return boolean variable , true if there is an intersection of the ray and triangle false otherwise
+*/
+bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2, Ray& ray)
+{
+    //Calculating the plane using the trianglePlane() function
+    Plane plane = trianglePlane(v0, v1, v2);
+
+    //First we check if the ray intersects with the plane (described above)
+    if (glm::abs(glm::dot(glm::normalize(plane.normal), ray.direction)) > 1e-6) {
+        //Calculating the intersection point of the ray and the plane
+        glm::vec3 intersectPoint = ray.origin + ray.direction * (glm::dot(v0 - ray.origin, plane.normal) / glm::dot(ray.direction, plane.normal));
+
+        //Now we check if the point that we calculated before lies inside the triangle
+        if (pointInTriangle(v0, v1, v2, plane.normal, intersectPoint)) {
+            // Also we need to check that the t value is positive ray.t>0
+            if ((plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal)) < 0) {
+                //Triangle behind ray origin
+                return false;
+            }
+            //If needed we update the ray.t value to get the smallest positive t value
+            ray.t = glm::min(ray.t, (plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal)));
+            return true;
+        }
+    }
+    //No hit with the triangle plane
+    return false;
+}
+
+/*
 * Checks whether the given ray intersects with a sphere. Also updates if needed the ray.t value
 * 
 * Equation of the sphere:
@@ -221,29 +253,34 @@ bool intersectRayWithShape(const Sphere& sphere, Ray& ray, HitInfo& hitInfo)
 }
 
 /*
-TODO
+* It checks whether the ray intersects with the axis-aligned box
+* 
+* Split the box into 12 triangles and check one by one if it intersects
+* 
+* @param axisAlignedBox and the ray
+* @return true if there is an intersection, false otherwise
 */
 bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray)
 {
     bool hit = false;
 
-    //float x0 = box.lower.x, y0 = box.lower.y, z0 = box.lower.z, x1 = box.upper.x, y1 = box.upper.y, z1 = box.upper.z;
+    float x0 = box.lower.x, y0 = box.lower.y, z0 = box.lower.z, x1 = box.upper.x, y1 = box.upper.y, z1 = box.upper.z;
 
-    //hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z0 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x0,y0,z1 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z0 }, glm::vec3{ x0,y0,z1 }, glm::vec3{ x1,y0,z0 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z0 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x1,y0,z0 }, ray);
+    hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z0 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x0,y0,z1 }, ray);
+    hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z0 }, glm::vec3{ x0,y0,z1 }, glm::vec3{ x1,y0,z0 }, ray);
+    hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z0 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x1,y0,z0 }, ray);
 
-    //hit |= intersectRayWithTriangle(glm::vec3{ x0,y1,z1 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x0,y0,z1 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x1,y0,z1 }, glm::vec3{ x0,y0,z1 }, glm::vec3{ x1,y0,z0 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z0 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x1,y0,z0 }, ray);
+    hit |= intersectRayWithTriangle(glm::vec3{ x0,y1,z1 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x0,y0,z1 }, ray);
+    hit |= intersectRayWithTriangle(glm::vec3{ x1,y0,z1 }, glm::vec3{ x0,y0,z1 }, glm::vec3{ x1,y0,z0 }, ray);
+    hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z0 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x1,y0,z0 }, ray);
 
-    //hit |= intersectRayWithTriangle(glm::vec3{ x0,y1,z1 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x1,y1,z0 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x1,y0,z1 }, glm::vec3{ x1,y1,z0 }, glm::vec3{ x1,y0,z0 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z1 }, glm::vec3{ x0,y1,z1 }, glm::vec3{ x1,y0,z1 }, ray);
+    hit |= intersectRayWithTriangle(glm::vec3{ x0,y1,z1 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x1,y1,z0 }, ray);
+    hit |= intersectRayWithTriangle(glm::vec3{ x1,y0,z1 }, glm::vec3{ x1,y1,z0 }, glm::vec3{ x1,y0,z0 }, ray);
+    hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z1 }, glm::vec3{ x0,y1,z1 }, glm::vec3{ x1,y0,z1 }, ray);
 
-    //hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z1 }, glm::vec3{ x0,y1,z1 }, glm::vec3{ x1,y0,z1 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z1 }, glm::vec3{ x1,y0,z1 }, glm::vec3{ x1,y1,z0 }, ray);
-    //hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z1 }, glm::vec3{ x0,y1,z1 }, glm::vec3{ x1,y1,z0 }, ray);
+    hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z1 }, glm::vec3{ x0,y1,z1 }, glm::vec3{ x1,y0,z1 }, ray);
+    hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z1 }, glm::vec3{ x1,y0,z1 }, glm::vec3{ x1,y1,z0 }, ray);
+    hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z1 }, glm::vec3{ x0,y1,z1 }, glm::vec3{ x1,y1,z0 }, ray);
 
     return hit;
 }
