@@ -42,38 +42,43 @@ enum class ViewMode {
 
 static glm::vec3 diffuseOnly(PointLight pointlight, HitInfo hitInfo, Ray ray) {
     glm::vec3 lightPos = pointlight.position;
-    glm::vec3 color = pointlight.color;
+    glm::vec3 lightColor = pointlight.color;
     glm::vec3 hitPos = ray.origin + ray.t * ray.direction;
 
     glm::vec3 lightDir = lightPos - hitPos;
-    glm::vec3 normalizedNormal = glm::normalize(hitInfo.normal);
     lightDir = glm::normalize(lightDir);
+
+    glm::vec3 normalizedNormal = glm::normalize(hitInfo.normal);
 
     float dotProductNormailLightVector = glm::dot(normalizedNormal, lightDir);
 
     if (dotProductNormailLightVector > 0) {
         glm::vec3 diffuse = hitInfo.material.kd * dotProductNormailLightVector;
-        diffuse.x *= color.x;
-        diffuse.y *= color.y;
-        diffuse.z *= color.z;
+        diffuse.x *= lightColor.x;
+        diffuse.y *= lightColor.y;
+        diffuse.z *= lightColor.z;
         return diffuse;
     }
+
     return glm::vec3{ 0,0,0 };
 }
 
 static glm::vec3 phongSpecular(HitInfo hitInfo, Ray ray, PointLight pointlight) {
-    glm::vec3 ans{};
+    glm::vec3 specular {};
     glm::vec3 lightPos = pointlight.position;
-    glm::vec3 color = pointlight.color;
+    glm::vec3 lightColor = pointlight.color;
     glm::vec3 hitPos = ray.origin + ray.t * ray.direction;
 
     glm::vec3 lightVector = lightPos - hitPos;
     lightVector = glm::normalize(lightVector);
-    glm::vec3 H = 2 * glm::dot(lightVector, glm::normalize(hitInfo.normal)) * glm::normalize(hitInfo.normal) - lightVector;
 
-    ans = glm::pow(glm::max(glm::dot(glm::normalize(hitInfo.normal), glm::normalize(H)), 0.f), hitInfo.material.shininess) * hitInfo.material.ks;
+    glm::vec3 normalizedNormal = glm::normalize(hitInfo.normal);
 
-    return ans;
+    glm::vec3 H = 2 * glm::dot(lightVector, normalizedNormal) * normalizedNormal - lightVector;
+    H = glm::normalize(H);
+
+    specular = glm::pow(glm::max(glm::dot(normalizedNormal, H), 0.f), hitInfo.material.shininess) * hitInfo.material.ks;
+    return specular;
 }
 
 static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray)
@@ -86,6 +91,7 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
         glm::vec3 ans{ 0,0,0 };
 
         for (const auto& light : scene.lights) {
+
             if (std::holds_alternative<PointLight>(light)) {
                 const PointLight pointlight = std::get<PointLight>(light);
 
@@ -94,14 +100,38 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
                 
             } else if (std::holds_alternative<SegmentLight>(light)) {
                 const SegmentLight segmentlight = std::get<SegmentLight>(light);
-                // perform your calculations for a segment light.
+                
+                const PointLight pointlightOne = { segmentlight.endpoint0, segmentlight.color0 };
+                const PointLight pointlightTwo = { segmentlight.endpoint1, segmentlight.color1 };
+
+                ans += diffuseOnly(pointlightOne, hitInfo, ray);
+                ans += phongSpecular(hitInfo, ray, pointlightOne);
+
+                ans += diffuseOnly(pointlightTwo, hitInfo, ray);
+                ans += phongSpecular(hitInfo, ray, pointlightTwo);
+
             } else if (std::holds_alternative<ParallelogramLight>(light)) {
                 const ParallelogramLight parallelogramlight = std::get<ParallelogramLight>(light);
                 // perform your calculations for a parallelogram light.
+                const PointLight pointlightZero = { parallelogramlight.v0, parallelogramlight.color0};
+                const PointLight pointlightOne = { parallelogramlight.v0 + parallelogramlight.edge01, parallelogramlight.color1 };
+                const PointLight pointlightTwo = { parallelogramlight.v0 + parallelogramlight.edge02, parallelogramlight.color2 };
+                const PointLight pointlightThree = { parallelogramlight.v0 + parallelogramlight.edge01 + parallelogramlight.edge02, parallelogramlight.color3 };
+
+                ans += diffuseOnly(pointlightZero, hitInfo, ray);
+                ans += phongSpecular(hitInfo, ray, pointlightZero);
+
+                ans += diffuseOnly(pointlightOne, hitInfo, ray);
+                ans += phongSpecular(hitInfo, ray, pointlightOne);
+
+                ans += diffuseOnly(pointlightTwo, hitInfo, ray);
+                ans += phongSpecular(hitInfo, ray, pointlightTwo);
+
+                ans += diffuseOnly(pointlightThree, hitInfo, ray);
+                ans += phongSpecular(hitInfo, ray, pointlightThree);
             }
         }
 
-        // Set the color of the pixel to white if the ray hits.
         return ans;
     } else {
         // Draw a red debug ray if the ray missed.

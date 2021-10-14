@@ -152,8 +152,15 @@ bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const gl
             //ray.t = glm::min(ray.t, (plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal)));
             if (ray.t > (plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal))) {
                 ray.t = (plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal));
+            }
+
+            if (glm::dot(plane.normal, ray.direction) < 0) {
                 hitInfo.normal = plane.normal;
             }
+            else {
+                hitInfo.normal = -plane.normal;
+            }
+
             return true;
         }
     }
@@ -208,16 +215,36 @@ bool intersectRayWithShape(const Sphere& sphere, Ray& ray, HitInfo& hitInfo)
 
         //Check if one of the points is behind the ray and if needed update the ray.t value
         if (t1 < 0) {
-            ray.t = glm::min(ray.t, t2);  
+            if (ray.t > t2) {
+                ray.t = t2;
+                hitInfo.material = sphere.material;
+                glm::vec3 p = ray.origin + t2 * ray.direction;
+                hitInfo.normal = glm::normalize(sphere.center - p);
+            }
             return true;
         }
         if (t2 < 0) {
-            ray.t = glm::min(ray.t, t1);
+            if (ray.t > t1) {
+                ray.t = t1;
+                hitInfo.material = sphere.material;
+                glm::vec3 p = ray.origin + t1 * ray.direction;
+                hitInfo.normal = glm::normalize(sphere.center - p);
+            }
             return true;
         }
         //otherwise both points hit the sphere, in that case we update (if needed) the ray.t value
         // to take the smallest non-negative t value
         ray.t = glm::min(ray.t, glm::min(t1, t2));
+        if (ray.t == t1) {
+            hitInfo.material = sphere.material;
+            glm::vec3 p = ray.origin + t1 * ray.direction;
+            hitInfo.normal = glm::normalize(p - sphere.center);
+        }
+        if (ray.t == t2) {
+            hitInfo.material = sphere.material;
+            glm::vec3 p = ray.origin + t2 * ray.direction;
+            hitInfo.normal = glm::normalize(p - sphere.center);
+        }
         return true;
     }
     //No intersection return false
