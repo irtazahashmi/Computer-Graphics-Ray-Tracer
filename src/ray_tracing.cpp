@@ -221,28 +221,30 @@ bool intersectRayWithShape(const Sphere& sphere, Ray& ray, HitInfo& hitInfo)
 }
 
 /*
-* It checks whether the ray intersects with the axis-aligned box
-* 
-* Split the box into 12 triangles and check one by one if it intersects
-* 
+* It checks whether the ray intersects with the axis-aligned box.
+*
+* Using the equations from the lecture, checking if the ray intersects with the axis
+* aligned box. Also checks if the intersection happened behind or in front of the origin
+* of the ray.
+*
 * @param axisAlignedBox and the ray
 * @return true if there is an intersection, false otherwise
 */
 bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray)
 {
-    // using txmin = (xmin - ox) / dx as an example to find all six sides of the box - lecture slides
+    // using txmin = (xmin - ox) / dx as an example to find all six sides of the box -> src: lecture slides
     // X components
     float tXMin = (box.lower.x - ray.origin.x) / ray.direction.x;
     float tXMax = (box.upper.x - ray.origin.x) / ray.direction.x;
-    // Y componeneets
+    // Y components
     float tYMin = (box.lower.y - ray.origin.y) / ray.direction.y;
     float tYMax = (box.upper.y - ray.origin.y) / ray.direction.y;
     // Z component
     float tZMin = (box.lower.z - ray.origin.z) / ray.direction.z;
     float tZMax = (box.upper.z - ray.origin.z) / ray.direction.z;
 
-    // tXIn = min(txmin, txmax) ---- tXOut = max(txmin,txmax) --- lecture slides
-    // X componenets
+    // tXIn = min(txmin, txmax) ---- tXOut = max(txmin, txmax) -> src: lecture slides
+    // X components
     float tXIn = std::min(tXMin, tXMax);
     float tXOut = std::max(tXMin, tXMax);
     // Y
