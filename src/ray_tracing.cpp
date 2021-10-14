@@ -220,9 +220,6 @@ bool intersectRayWithShape(const Sphere& sphere, Ray& ray, HitInfo& hitInfo)
     return false;
 }
 
-<<<<<<< HEAD
-
-=======
 /*
 * It checks whether the ray intersects with the axis-aligned box
 * 
@@ -231,7 +228,6 @@ bool intersectRayWithShape(const Sphere& sphere, Ray& ray, HitInfo& hitInfo)
 * @param axisAlignedBox and the ray
 * @return true if there is an intersection, false otherwise
 */
->>>>>>> 9cca1426f4cbe23d317212986abd2387c295a5b4
 bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray)
 {
     // using txmin = (xmin - ox) / dx as an example to find all six sides of the box - lecture slides
@@ -244,8 +240,6 @@ bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray)
     // Z component
     float tZMin = (box.lower.z - ray.origin.z) / ray.direction.z;
     float tZMax = (box.upper.z - ray.origin.z) / ray.direction.z;
-
-<<<<<<< HEAD
 
     // tXIn = min(txmin, txmax) ---- tXOut = max(txmin,txmax) --- lecture slides
     // X componenets
@@ -266,27 +260,6 @@ bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray)
     if (tIn > tOut || tOut < 0) {
         return false;
     }
-
-=======
-    float x0 = box.lower.x, y0 = box.lower.y, z0 = box.lower.z, x1 = box.upper.x, y1 = box.upper.y, z1 = box.upper.z;
-
-    hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z0 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x0,y0,z1 }, ray);
-    hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z0 }, glm::vec3{ x0,y0,z1 }, glm::vec3{ x1,y0,z0 }, ray);
-    hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z0 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x1,y0,z0 }, ray);
-
-    hit |= intersectRayWithTriangle(glm::vec3{ x0,y1,z1 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x0,y0,z1 }, ray);
-    hit |= intersectRayWithTriangle(glm::vec3{ x1,y0,z1 }, glm::vec3{ x0,y0,z1 }, glm::vec3{ x1,y0,z0 }, ray);
-    hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z0 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x1,y0,z0 }, ray);
-
-    hit |= intersectRayWithTriangle(glm::vec3{ x0,y1,z1 }, glm::vec3{ x0,y1,z0 }, glm::vec3{ x1,y1,z0 }, ray);
-    hit |= intersectRayWithTriangle(glm::vec3{ x1,y0,z1 }, glm::vec3{ x1,y1,z0 }, glm::vec3{ x1,y0,z0 }, ray);
-    hit |= intersectRayWithTriangle(glm::vec3{ x0,y0,z1 }, glm::vec3{ x0,y1,z1 }, glm::vec3{ x1,y0,z1 }, ray);
-
-    hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z1 }, glm::vec3{ x0,y1,z1 }, glm::vec3{ x1,y0,z1 }, ray);
-    hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z1 }, glm::vec3{ x1,y0,z1 }, glm::vec3{ x1,y1,z0 }, ray);
-    hit |= intersectRayWithTriangle(glm::vec3{ x1,y1,z1 }, glm::vec3{ x0,y1,z1 }, glm::vec3{ x1,y1,z0 }, ray);
->>>>>>> 9cca1426f4cbe23d317212986abd2387c295a5b4
-
     // there is an intersection of ray and AABB
     if (tIn < ray.t) {
         // if the intersection is behind the origin of the ray, then update ray.t as tOut
