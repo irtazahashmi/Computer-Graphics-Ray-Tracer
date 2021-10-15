@@ -32,7 +32,7 @@ DISABLE_WARNINGS_POP()
 #include <variant>
 
 // This is the main application. The code in here does not need to be modified.
-constexpr glm::ivec2 windowResolution { 1600, 1600 };
+constexpr glm::ivec2 windowResolution { 1600, 1600 }; // window resolution
 const std::filesystem::path dataPath { DATA_DIR };
 
 enum class ViewMode {
@@ -40,11 +40,23 @@ enum class ViewMode {
     RayTracing = 1
 };
 
+
+/*
+* Calculates the diffuse term of the phong model using:
+*
+*           diffuse = kd * dot(N, L) 
+* 
+* where N is the normal and L is the light direction.
+* 
+* @param a point light, the hitInfo object and the ray
+* @return a vector of the diffuse component of the phong model
+*/
 static glm::vec3 calculateDiffuse(PointLight pointlight, HitInfo hitInfo, Ray ray) {
     glm::vec3 lightPos = pointlight.position;
     glm::vec3 lightColor = pointlight.color;
     glm::vec3 hitPos = ray.origin + ray.t * ray.direction;
 
+    // calculate light direction
     glm::vec3 lightDir = lightPos - hitPos;
     lightDir = glm::normalize(lightDir);
 
@@ -61,21 +73,33 @@ static glm::vec3 calculateDiffuse(PointLight pointlight, HitInfo hitInfo, Ray ra
     }
 
     // else return black
-    return glm::vec3{ 0,0,0 };
+    return glm::vec3{ 0.0f };
 }
 
+/*
+* Calculates the specular term of the phong model using:
+*
+*           specular = ks * dot(N, H)^shininess
+*
+* where N is the normal and H is the reflection vector
+*
+* @param a point light, the hitInfo object and the ray
+* @return a vector of the specular component of the phong model
+*/
 static glm::vec3 calculateSpecular(PointLight pointlight, HitInfo hitInfo, Ray ray) {
-    glm::vec3 specular {0.0f};
+    glm::vec3 specular{ 0.0f };
     glm::vec3 lightPos = pointlight.position;
     glm::vec3 lightColor = pointlight.color;
     glm::vec3 hitPos = ray.origin + ray.t * ray.direction;
 
-    glm::vec3 lightVector = lightPos - hitPos;
-    lightVector = glm::normalize(lightVector);
+    // light dir
+    glm::vec3 lightDir = lightPos - hitPos;
+    lightDir = glm::normalize(lightDir);
 
     glm::vec3 normalizedNormal = glm::normalize(hitInfo.normal);
 
-    glm::vec3 H = 2 * glm::dot(lightVector, normalizedNormal) * normalizedNormal - lightVector;
+    // reflection vec
+    glm::vec3 H = 2 * glm::dot(lightDir, normalizedNormal) * normalizedNormal - lightDir;
     H = glm::normalize(H);
 
     specular = glm::pow(glm::max(glm::dot(normalizedNormal, H), 0.0f), hitInfo.material.shininess) * hitInfo.material.ks;
@@ -127,7 +151,7 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
 
                 glm::vec3 x = (lightOnePos - lightZeroPos) / (float) sampleSize;
             
-                for (int i = 0; i <= sampleSize; i++) {
+                for (int i = 0; i < sampleSize; i++) {
                     glm::vec3 currPos = lightZeroPos + (float) i * x;
                     glm::vec3 currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor) * alpha;
                     PointLight currPointLight = { currPos, currColor };
@@ -155,8 +179,8 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
                 glm::vec3 y_step = (vertexTwo - vertexZero) / (float) sampleSize;
 
                 // f(0,0)(1-x)(1-y) + f(0,1)(1-x)y + f(1,0) x(1-y) + f(1,1)xy
-                for (int i = 0; i <= sampleSize; i++) {
-                    for (int j = 0; j <= sampleSize; j++) {
+                for (int i = 0; i < sampleSize; i++) {
+                    for (int j = 0; j < sampleSize; j++) {
                         glm::vec3 currColor{ 0.f };
                         currColor += (colorZero * (1 - i * alpha) * (1 - j * alpha));
                         currColor += (colorOne * (1 - i * alpha) * (j * alpha));

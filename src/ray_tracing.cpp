@@ -13,7 +13,7 @@ DISABLE_WARNINGS_POP()
 /*
 * Checks whether a given point is inside a given triangle.
 * 
-* This is done by finding whether the point p lies inside the edges of the triangle.
+* This is done by finding whether the point p lies inside all three edges of the triangle.
 * 
 * @param 3 vectors, indicating the 3 vartices of the triangle, 1 vector indicating the point we want to check
 *           and the normal of the triangle
@@ -163,7 +163,6 @@ bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const gl
             // storing t for the the nearest triangle intersection
             if (previousT < ray.t) {
                 ray.t = previousT;
-                return false;
             }
 
             // update the plane for hitInfo
@@ -174,6 +173,7 @@ bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const gl
                 hitInfo.normal = -planeTriangle.normal;
             }
 
+            // intersection - sucessful
             return true;
         }
     }
@@ -181,23 +181,16 @@ bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const gl
     // no intersection/the point is not inside the triangle -> roll back 
     ray.t = previousT;
     // intersection of ray triangle - fail
-    return false;
+    return intersectTriangleSuccess;
 }
 
 /*
 * Checks whether the given ray intersects with a sphere. Also updates if needed the ray.t value
 * 
-* Equation of the sphere:
-* (x - a)^2 + (y - b)^2 + (z - c)^2 = radius^2
+* We calculate a, b c, using formulae given in the lecture. Then we reduce the equation in 
+* the form of (math done by hand):
 * 
-* Substituting;
-* a = ray.origin.x + ray.direction.x *  ray.t
-* b = ray.origin.y + ray.direction.y *  ray.t
-* c = ray.origin.z + ray.direction.z *  ray.t
-* 
-* And then reduce the equation in the form of (math done by hand)
-* 
-*           a*t^2 + b*t + c =0
+*   a*t^2 + b*t + c =0
 * 
 * Next we find (if any) the value(s) of the t. And then we check if its not behind the ray
 * and update if needed the ray.t value. 
