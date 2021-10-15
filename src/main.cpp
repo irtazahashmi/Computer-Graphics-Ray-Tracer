@@ -52,23 +52,28 @@ enum class ViewMode {
 * @return a vector of the diffuse component of the phong model
 */
 static glm::vec3 calculateDiffuse(PointLight pointlight, HitInfo hitInfo, Ray ray) {
-    glm::vec3 lightPos = pointlight.position;
+    // light attributes
     glm::vec3 lightColor = pointlight.color;
+    glm::vec3 lightPos = pointlight.position;
+
+    // intersection point
     glm::vec3 hitPos = ray.origin + ray.t * ray.direction;
 
     // calculate light direction
     glm::vec3 lightDir = lightPos - hitPos;
     lightDir = glm::normalize(lightDir);
 
+    // normal
     glm::vec3 normalizedNormal = glm::normalize(hitInfo.normal);
 
     float dotProductNormailLightVector = glm::dot(normalizedNormal, lightDir);
 
+    // if light infront, find diffuse component
     if (dotProductNormailLightVector > 0) {
         glm::vec3 diffuse = hitInfo.material.kd * dotProductNormailLightVector;
-        diffuse.x *= lightColor.x;
-        diffuse.y *= lightColor.y;
-        diffuse.z *= lightColor.z;
+        //diffuse.x *= lightColor.x;
+        //diffuse.y *= lightColor.y;
+        //diffuse.z *= lightColor.z;
         return diffuse;
     }
 
@@ -87,22 +92,28 @@ static glm::vec3 calculateDiffuse(PointLight pointlight, HitInfo hitInfo, Ray ra
 * @return a vector of the specular component of the phong model
 */
 static glm::vec3 calculateSpecular(PointLight pointlight, HitInfo hitInfo, Ray ray) {
-    glm::vec3 specular{ 0.0f };
-    glm::vec3 lightPos = pointlight.position;
+    // light attributes
     glm::vec3 lightColor = pointlight.color;
+    glm::vec3 lightPos = pointlight.position;
+
+    // intersection point
     glm::vec3 hitPos = ray.origin + ray.t * ray.direction;
 
     // light dir
     glm::vec3 lightDir = lightPos - hitPos;
     lightDir = glm::normalize(lightDir);
 
+    //normal
     glm::vec3 normalizedNormal = glm::normalize(hitInfo.normal);
 
     // reflection vec
     glm::vec3 H = 2 * glm::dot(lightDir, normalizedNormal) * normalizedNormal - lightDir;
     H = glm::normalize(H);
 
-    specular = glm::pow(glm::max(glm::dot(normalizedNormal, H), 0.0f), hitInfo.material.shininess) * hitInfo.material.ks;
+    //calculate specular
+    float shininess = hitInfo.material.shininess;
+    glm::vec3 ks = hitInfo.material.ks;
+    glm::vec3 specular = ks * glm::pow(glm::max(glm::dot(normalizedNormal, H), 0.0f), shininess);
     return specular;
 }
 
@@ -131,13 +142,18 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
   
         glm::vec3 finalColor{ 0.0f };
 
+        // for all the lights in the scene
         for (const auto& light : scene.lights) {
+
+            // point light
             if (std::holds_alternative<PointLight>(light)) {
                 const PointLight pointlight = std::get<PointLight>(light);
 
-                finalColor += calculateDiffuse(pointlight, hitInfo, ray);
-                finalColor += calculateSpecular(pointlight, hitInfo, ray);
+                finalColor += pointlight.color * calculateDiffuse(pointlight, hitInfo, ray);
+                finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
 
+
+            // segment light
             } else if (std::holds_alternative<SegmentLight>(light)) {
                 const SegmentLight segmentlight = std::get<SegmentLight>(light);
                 
@@ -153,12 +169,14 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
             
                 for (int i = 0; i < sampleSize; i++) {
                     glm::vec3 currPos = lightZeroPos + (float) i * x;
-                    glm::vec3 currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor) * alpha;
+                    // linear interpolation
+                    glm::vec3 currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor);
                     PointLight currPointLight = { currPos, currColor };
-                    finalColor += calculateDiffuse(currPointLight, hitInfo, ray);
-                    finalColor += calculateSpecular(currPointLight, hitInfo, ray);
+                    finalColor += currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray) * alpha;
+                    finalColor += currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray)  * alpha;
                 }
 
+                // parallelogram light
             } else if (std::holds_alternative<ParallelogramLight>(light)) {
                 const ParallelogramLight parallelogramlight = std::get<ParallelogramLight>(light);
 
@@ -178,19 +196,23 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
                 glm::vec3 x_step = (vertexOne - vertexZero) / (float) sampleSize;
                 glm::vec3 y_step = (vertexTwo - vertexZero) / (float) sampleSize;
 
+                // bilinear interpolation
                 // f(0,0)(1-x)(1-y) + f(0,1)(1-x)y + f(1,0) x(1-y) + f(1,1)xy
                 for (int i = 0; i < sampleSize; i++) {
                     for (int j = 0; j < sampleSize; j++) {
+
                         glm::vec3 currColor{ 0.f };
                         currColor += (colorZero * (1 - i * alpha) * (1 - j * alpha));
                         currColor += (colorOne * (1 - i * alpha) * (j * alpha));
                         currColor += (colorTwo * (i * alpha) * (1 - j * alpha));
                         currColor += (colorThree * (i * alpha) * (j * alpha));
                         currColor *= (alpha * alpha);
+
                         glm::vec3 currPos = vertexZero + ((float)i * x_step + (float)j * y_step);
                         PointLight currPointLight = { currPos, currColor };
-                        finalColor += calculateDiffuse(currPointLight, hitInfo, ray);
-                        finalColor += calculateSpecular(currPointLight, hitInfo, ray);
+
+                        finalColor += currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray);
+                        finalColor += currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray);
                     }
                 }
             }

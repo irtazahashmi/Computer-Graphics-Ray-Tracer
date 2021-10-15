@@ -351,6 +351,9 @@ bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray)
             // else the intersection is infront. update ray.t as tIn (where the ray hits the box) and return true
             ray.t = tIn;
         }
+        return true;
     }
-    return true;
+
+    // no intersection
+    return false;
 }
