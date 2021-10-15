@@ -163,12 +163,12 @@ bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const gl
 bool intersectRayWithShape(const Sphere& sphere, Ray& ray, HitInfo& hitInfo)
 {
     //a , b , c of the quadratic formula
-    float a = glm::pow(ray.direction.x, 2) + glm::pow(ray.direction.y, 2) + glm::pow(ray.direction.z, 2);
+    float a = (float) glm::pow(ray.direction.x, 2) + (float) glm::pow(ray.direction.y, 2) + (float) glm::pow(ray.direction.z, 2);
     float b = -2.f * (ray.direction.x * sphere.center.x + ray.direction.y * sphere.center.y + ray.direction.z * sphere.center.z)
         + 2.f * (ray.direction.x * ray.origin.x + ray.direction.y * ray.origin.y + ray.direction.z * ray.origin.z);
-    float c = glm::pow(sphere.center.x, 2) + glm::pow(sphere.center.y, 2) + glm::pow(sphere.center.z, 2)
-        - glm::pow(sphere.radius, 2)
-        + glm::pow(ray.origin.x, 2) + glm::pow(ray.origin.y, 2) + glm::pow(ray.origin.z, 2)
+    float c = (float) glm::pow(sphere.center.x, 2) +  (float)glm::pow(sphere.center.y, 2) + (float) glm::pow(sphere.center.z, 2)
+        - (float) glm::pow(sphere.radius, 2)
+        + (float) glm::pow(ray.origin.x, 2) + (float) glm::pow(ray.origin.y, 2) + (float) glm::pow(ray.origin.z, 2)
         - 2.f * (sphere.center.x * ray.origin.x + sphere.center.y * ray.origin.y + sphere.center.z * ray.origin.z);
     
     //Check if the discriminant is non-negative that means there are real values for t

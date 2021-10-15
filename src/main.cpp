@@ -81,21 +81,38 @@ static glm::vec3 phongSpecular(PointLight pointlight, HitInfo hitInfo, Ray ray) 
     return specular;
 }
 
+static bool hitLight(const BoundingVolumeHierarchy& bvh, Ray ray, glm::vec3 lightPos) {
+    Ray tempLightRay;
+    tempLightRay.origin = lightPos;
+    tempLightRay.direction = glm::normalize((ray.origin + ray.t * ray.direction) - tempLightRay.origin);
+
+    HitInfo hitInfo;
+    bvh.intersect(tempLightRay, hitInfo);
+
+    if (glm::length(
+        (tempLightRay.origin + tempLightRay.t * tempLightRay.direction)
+        - (ray.origin + ray.t * ray.direction)) < 1E-6) {
+        return true;
+    }
+    return false;
+}
+
 static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray)
 {
     HitInfo hitInfo;
     if (bvh.intersect(ray, hitInfo)) {
   
-        glm::vec3 finalColor{ 0,0,0 };
+        glm::vec3 finalColor{ 0.0f };
 
         for (const auto& light : scene.lights) {
-
             if (std::holds_alternative<PointLight>(light)) {
                 const PointLight pointlight = std::get<PointLight>(light);
 
-                finalColor += diffuseOnly(pointlight, hitInfo, ray);
-                finalColor += phongSpecular(pointlight, hitInfo, ray);
-                
+                if (hitLight(bvh, ray, pointlight.position)) {
+                    finalColor += diffuseOnly(pointlight, hitInfo, ray);
+                    finalColor += phongSpecular(pointlight, hitInfo, ray);
+                }
+
             } else if (std::holds_alternative<SegmentLight>(light)) {
                 const SegmentLight segmentlight = std::get<SegmentLight>(light);
                 
@@ -109,10 +126,9 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
 
                 glm::vec3 x = (lightOnePos - lightZeroPos) / (float) sampleSize;
             
-                glm::vec3 currColor { 0.f };
-                for (int i = 0; i < sampleSize; i++) {
+                for (int i = 0; i <= sampleSize; i++) {
                     glm::vec3 currPos = lightZeroPos + (float) i * x;
-                    currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor) * alpha;
+                    glm::vec3 currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor) * alpha;
                     PointLight currPointLight = { currPos, currColor };
                     finalColor += diffuseOnly(currPointLight, hitInfo, ray);
                     finalColor += phongSpecular(currPointLight, hitInfo, ray);
@@ -120,23 +136,38 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
 
             } else if (std::holds_alternative<ParallelogramLight>(light)) {
                 const ParallelogramLight parallelogramlight = std::get<ParallelogramLight>(light);
-                // perform your calculations for a parallelogram light.
-                const PointLight pointlightZero = { parallelogramlight.v0, parallelogramlight.color0};
-                const PointLight pointlightOne = { parallelogramlight.v0 + parallelogramlight.edge01, parallelogramlight.color1 };
-                const PointLight pointlightTwo = { parallelogramlight.v0 + parallelogramlight.edge02, parallelogramlight.color2 };
-                const PointLight pointlightThree = { parallelogramlight.v0 + parallelogramlight.edge01 + parallelogramlight.edge02, parallelogramlight.color3 };
 
-                finalColor += diffuseOnly(pointlightZero, hitInfo, ray);
-                finalColor += phongSpecular(pointlightZero, hitInfo, ray);
+                int sampleSize = 10;
+                float alpha = 0.1f;
+                
+                glm::vec3 vertexZero = parallelogramlight.v0; // v0
+                glm::vec3 vertexOne = vertexZero + parallelogramlight.edge01; // vo + v1
+                glm::vec3 vertexTwo = vertexZero + parallelogramlight.edge02; // vo + v2
+                glm::vec3 vertexThree = vertexOne + parallelogramlight.edge02; // vo + v1 + v2
 
-                finalColor += diffuseOnly(pointlightOne, hitInfo, ray);
-                finalColor += phongSpecular(pointlightOne, hitInfo, ray);
+                glm::vec3 colorZero = parallelogramlight.color0;
+                glm::vec3 colorOne = parallelogramlight.color1;
+                glm::vec3 colorTwo = parallelogramlight.color2;
+                glm::vec3 colorThree = parallelogramlight.color3;
 
-                finalColor += diffuseOnly(pointlightTwo, hitInfo, ray);
-                finalColor += phongSpecular(pointlightTwo, hitInfo, ray);
+                glm::vec3 x_step = (vertexOne - vertexZero) / (float) sampleSize;
+                glm::vec3 y_step = (vertexTwo - vertexZero) / (float) sampleSize;
 
-                finalColor += diffuseOnly(pointlightThree, hitInfo, ray);
-                finalColor += phongSpecular(pointlightThree, hitInfo, ray);
+                // f(0,0)(1-x)(1-y) + f(0,1)(1-x)y + f(1,0) x(1-y) + f(1,1)xy
+                for (int i = 0; i <= sampleSize; i++) {
+                    for (int j = 0; j <= sampleSize; j++) {
+                        glm::vec3 currColor{ 0.f };
+                        currColor += (colorZero * (1 - i * alpha) * (1 - j * alpha));
+                        currColor += (colorOne * (1 - i * alpha) * (j * alpha));
+                        currColor += (colorTwo * (i * alpha) * (1 - j * alpha));
+                        currColor += (colorThree * (i * alpha) * (j * alpha));
+                        currColor *= (alpha * alpha);
+                        glm::vec3 currPos = vertexZero + ((float)i * x_step + (float)j * y_step);
+                        PointLight currPointLight = { currPos, currColor };
+                        finalColor += diffuseOnly(currPointLight, hitInfo, ray);
+                        finalColor += phongSpecular(currPointLight, hitInfo, ray);
+                    }
+                }
             }
         }
 
