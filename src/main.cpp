@@ -32,7 +32,7 @@ DISABLE_WARNINGS_POP()
 #include <variant>
 
 // This is the main application. The code in here does not need to be modified.
-constexpr glm::ivec2 windowResolution { 800, 800 };
+constexpr glm::ivec2 windowResolution { 1600, 1600 };
 const std::filesystem::path dataPath { DATA_DIR };
 
 enum class ViewMode {
@@ -40,7 +40,7 @@ enum class ViewMode {
     RayTracing = 1
 };
 
-static glm::vec3 diffuseOnly(PointLight pointlight, HitInfo hitInfo, Ray ray) {
+static glm::vec3 calculateDiffuse(PointLight pointlight, HitInfo hitInfo, Ray ray) {
     glm::vec3 lightPos = pointlight.position;
     glm::vec3 lightColor = pointlight.color;
     glm::vec3 hitPos = ray.origin + ray.t * ray.direction;
@@ -60,10 +60,11 @@ static glm::vec3 diffuseOnly(PointLight pointlight, HitInfo hitInfo, Ray ray) {
         return diffuse;
     }
 
+    // else return black
     return glm::vec3{ 0,0,0 };
 }
 
-static glm::vec3 phongSpecular(PointLight pointlight, HitInfo hitInfo, Ray ray) {
+static glm::vec3 calculateSpecular(PointLight pointlight, HitInfo hitInfo, Ray ray) {
     glm::vec3 specular {0.0f};
     glm::vec3 lightPos = pointlight.position;
     glm::vec3 lightColor = pointlight.color;
@@ -81,6 +82,7 @@ static glm::vec3 phongSpecular(PointLight pointlight, HitInfo hitInfo, Ray ray) 
     return specular;
 }
 
+/*
 static bool hitLight(const BoundingVolumeHierarchy& bvh, Ray ray, glm::vec3 lightPos) {
     Ray tempLightRay;
     tempLightRay.origin = lightPos;
@@ -96,6 +98,7 @@ static bool hitLight(const BoundingVolumeHierarchy& bvh, Ray ray, glm::vec3 ligh
     }
     return false;
 }
+*/
 
 static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray)
 {
@@ -108,10 +111,8 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
             if (std::holds_alternative<PointLight>(light)) {
                 const PointLight pointlight = std::get<PointLight>(light);
 
-                if (hitLight(bvh, ray, pointlight.position)) {
-                    finalColor += diffuseOnly(pointlight, hitInfo, ray);
-                    finalColor += phongSpecular(pointlight, hitInfo, ray);
-                }
+                finalColor += calculateDiffuse(pointlight, hitInfo, ray);
+                finalColor += calculateSpecular(pointlight, hitInfo, ray);
 
             } else if (std::holds_alternative<SegmentLight>(light)) {
                 const SegmentLight segmentlight = std::get<SegmentLight>(light);
@@ -130,8 +131,8 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
                     glm::vec3 currPos = lightZeroPos + (float) i * x;
                     glm::vec3 currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor) * alpha;
                     PointLight currPointLight = { currPos, currColor };
-                    finalColor += diffuseOnly(currPointLight, hitInfo, ray);
-                    finalColor += phongSpecular(currPointLight, hitInfo, ray);
+                    finalColor += calculateDiffuse(currPointLight, hitInfo, ray);
+                    finalColor += calculateSpecular(currPointLight, hitInfo, ray);
                 }
 
             } else if (std::holds_alternative<ParallelogramLight>(light)) {
@@ -164,8 +165,8 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
                         currColor *= (alpha * alpha);
                         glm::vec3 currPos = vertexZero + ((float)i * x_step + (float)j * y_step);
                         PointLight currPointLight = { currPos, currColor };
-                        finalColor += diffuseOnly(currPointLight, hitInfo, ray);
-                        finalColor += phongSpecular(currPointLight, hitInfo, ray);
+                        finalColor += calculateDiffuse(currPointLight, hitInfo, ray);
+                        finalColor += calculateSpecular(currPointLight, hitInfo, ray);
                     }
                 }
             }

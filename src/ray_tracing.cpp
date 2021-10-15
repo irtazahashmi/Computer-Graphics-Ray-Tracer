@@ -37,7 +37,8 @@ bool pointInTriangle(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& 
     float insideEdgeThree = glm::dot(n, glm::cross(triangleEdgeThree, trianglePointThree));
 
     // point p inside the trianlge conditions
-    if (insideEdgeOne >= 0 && insideEdgeTwo >= 0 && insideEdgeThree >= 0) {
+    float epsilon = (float) 1E-6;
+    if (insideEdgeOne > epsilon && insideEdgeTwo > epsilon && insideEdgeThree > epsilon) {
         // point p inside triangle
         return true;
     }
@@ -56,16 +57,43 @@ bool pointInTriangle(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& 
 */
 bool intersectRayWithPlane(const Plane& plane, Ray& ray)
 {
-    //Check if the dot product of the normal of the plane, and the direction of the ray is not zero (+- error margin)
-    if (glm::abs(glm::dot(glm::normalize(plane.normal), ray.direction)) > 1e-6) {
-        //Also we check whether the calculated t value is less than zero, if so we return false (behind the ray)
-        if ((plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal)) < 0) {
-            return false;
-        }
-        //If the non-zero t.value has smaller value from the current t value we update it
-        ray.t = glm::min(ray.t, (plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal)));
-        return true;
+    // 1) no intersection is found or t <= 0: return false
+    // 2) found intersection point p
+    //    a) if p is closer to the ray origin then current intersection point : return true and update ray.t
+    //    b) else return false
+
+    // Getting all the variables to calculate the intersection point t
+    // t = (D - dot(o, n)) / dot(d, n)
+    // plane vars
+    float D = plane.D;
+    glm::vec3 n = plane.normal;
+    //ray vars
+    glm::vec3 o = ray.origin;
+    glm::vec3 d = ray.direction;
+
+    // calculate t components
+    float numerator = D - glm::dot(o, n);
+    float denominator = glm::dot(d, n);
+
+    // if abs(denominator) < epsilon, ray is parrallel is to plane -> no intersection
+    float epsilon = (float) 1E-6;
+    if (glm::abs(denominator) < epsilon) {
+        return false;
     }
+
+    // calculate intersection
+    float t = numerator / denominator;
+
+    // if intersection
+    if (t > epsilon) {
+        // if the intersection is closer than a previous intersection, update t and return true
+        if (t < ray.t) {
+            ray.t = t;
+            return true;
+        }
+    }
+
+    // else no intersection, return false
     return false;
 }
 
@@ -80,12 +108,22 @@ bool intersectRayWithPlane(const Plane& plane, Ray& ray)
 Plane trianglePlane(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2)
 {
     Plane plane;
-    //Calculating the normal
-    plane.normal = glm::normalize(glm::cross((v0 - v2), (v1 - v2)));
 
-    //Calculating the d value
-    plane.D = glm::dot(plane.normal, v0);
-    
+    // the cross product of difference of the triangle vertices is the normal of the plane:
+    // normalize ( cross((v0 - v2), (v1 - v2)) ) = normal of plane
+    glm::vec3 edgeAC = v0 - v2;
+    glm::vec3 edgeBC = v1 - v2;
+    glm::vec3 crossProduct = glm::cross(edgeAC, edgeBC);
+    glm::vec3 normalOfPlane = glm::normalize(crossProduct);
+    plane.normal = normalOfPlane;
+
+    // D is equal to dot(p, n)
+    glm::vec3 p = v0;
+    glm::vec3 n = normalOfPlane;
+    float D = glm::dot(p, n);
+    plane.D = D;
+
+    // return plane
     return plane;
 }
 
@@ -102,38 +140,47 @@ Plane trianglePlane(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v
 */
 bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2, Ray& ray, HitInfo& hitInfo)
 {
-    //Calculating the plane using the trianglePlane() function
-    Plane plane = trianglePlane(v0, v1, v2);
+    // TIP: Don’t forget to roll back the ray.t value modified in the intersectRayWithPlane method if 
+    // the point is not inside the triangle
 
-    //First we check if the ray intersects with the plane (described above)
-    if (glm::abs(glm::dot(glm::normalize(plane.normal), ray.direction)) > 1e-6) {
-        //Calculating the intersection point of the ray and the plane
-        glm::vec3 intersectPoint = ray.origin + ray.direction * (glm::dot(v0 - ray.origin, plane.normal) / glm::dot(ray.direction, plane.normal));
-        
-        //Now we check if the point that we calculated before lies inside the triangle
-        if (pointInTriangle(v0, v1, v2, plane.normal, intersectPoint)) {
-            // Also we need to check that the t value is positive ray.t>0
-            if ((plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal)) < 0) {
-                //Triangle behind ray origin
+    // First, compute the plane containing the triangle.
+    Plane planeTriangle = trianglePlane(v0, v1, v2);
+
+    // Second, compute the intersection point of the rayand the plane.
+    float previousT = ray.t;
+    bool intersectPlaneSuccess = intersectRayWithPlane(planeTriangle, ray);
+    bool intersectTriangleSuccess = false;
+
+    // If there is an (plane) intersection, the third step is to check if the point is inside the triangle.
+    if (intersectPlaneSuccess) {
+        glm::vec3 n = planeTriangle.normal;
+        glm::vec3 p = ray.origin + ray.direction * ray.t;
+        // check if point inside the triangle
+        intersectTriangleSuccess = pointInTriangle(v0, v1, v2, n, p);
+
+        // the point is in the triangle - intersection ray triangle - success
+        if (intersectTriangleSuccess) {
+            // storing t for the the nearest triangle intersection
+            if (previousT < ray.t) {
+                ray.t = previousT;
                 return false;
             }
-            //If needed we update the ray.t value to get the smallest positive t value
-            //ray.t = glm::min(ray.t, (plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal)));
-            if (ray.t > (plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal))) {
-                ray.t = (plane.D - glm::dot(ray.origin, glm::normalize(plane.normal))) / glm::dot(ray.direction, glm::normalize(plane.normal));
-            }
 
-            if (glm::dot(plane.normal, ray.direction) < 0) {
-                hitInfo.normal = plane.normal;
+            // update the plane for hitInfo
+            if (glm::dot(planeTriangle.normal, ray.direction) < 0) {
+                hitInfo.normal = planeTriangle.normal;
             }
             else {
-                hitInfo.normal = -plane.normal;
+                hitInfo.normal = -planeTriangle.normal;
             }
 
             return true;
         }
     }
-    //No hit with the triangle plane
+
+    // no intersection/the point is not inside the triangle -> roll back 
+    ray.t = previousT;
+    // intersection of ray triangle - fail
     return false;
 }
 
@@ -162,61 +209,100 @@ bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const gl
 */
 bool intersectRayWithShape(const Sphere& sphere, Ray& ray, HitInfo& hitInfo)
 {
-    //a , b , c of the quadratic formula
-    float a = (float) glm::pow(ray.direction.x, 2) + (float) glm::pow(ray.direction.y, 2) + (float) glm::pow(ray.direction.z, 2);
-    float b = -2.f * (ray.direction.x * sphere.center.x + ray.direction.y * sphere.center.y + ray.direction.z * sphere.center.z)
-        + 2.f * (ray.direction.x * ray.origin.x + ray.direction.y * ray.origin.y + ray.direction.z * ray.origin.z);
-    float c = (float) glm::pow(sphere.center.x, 2) +  (float)glm::pow(sphere.center.y, 2) + (float) glm::pow(sphere.center.z, 2)
-        - (float) glm::pow(sphere.radius, 2)
-        + (float) glm::pow(ray.origin.x, 2) + (float) glm::pow(ray.origin.y, 2) + (float) glm::pow(ray.origin.z, 2)
-        - 2.f * (sphere.center.x * ray.origin.x + sphere.center.y * ray.origin.y + sphere.center.z * ray.origin.z);
-    
-    //Check if the discriminant is non-negative that means there are real values for t
-    if (b * b - 4 * a * c >= 0) {
-        //Calulate the values of t
-        float t1 = (-b + glm::sqrt(b * b - 4 * a * c)) / (2 * a);
-        float t2 = (-b - glm::sqrt(b * b - 4 * a * c)) / (2 * a);
-        
-        //Check if both points are behind the ray, if so we return false
-        if (t1 < 0 && t2 < 0) {
-            return false;
-        }
+    // new origin is now dependent on the center of the sphere
+    glm::vec3 newOrigin = ray.origin - sphere.center;
 
-        //Check if one of the points is behind the ray and if needed update the ray.t value
-        if (t1 < 0) {
-            if (ray.t > t2) {
-                ray.t = t2;
-                hitInfo.material = sphere.material;
-                glm::vec3 p = ray.origin + t2 * ray.direction;
-                hitInfo.normal = glm::normalize(sphere.center - p);
-            }
-            return true;
-        }
-        if (t2 < 0) {
-            if (ray.t > t1) {
-                ray.t = t1;
-                hitInfo.material = sphere.material;
-                glm::vec3 p = ray.origin + t1 * ray.direction;
-                hitInfo.normal = glm::normalize(sphere.center - p);
-            }
-            return true;
-        }
-        //otherwise both points hit the sphere, in that case we update (if needed) the ray.t value
-        // to take the smallest non-negative t value
-        ray.t = glm::min(ray.t, glm::min(t1, t2));
-        if (ray.t == t1) {
+    // calculate a
+    float xDirection = (ray.direction.x * ray.direction.x);
+    float yDirection = (ray.direction.y * ray.direction.y);
+    float zDirection = (ray.direction.z * ray.direction.z);
+    float a = xDirection + yDirection + zDirection;
+
+    // calculate b
+    float xComponent = ray.direction.x * newOrigin.x;
+    float yComponent = ray.direction.y * newOrigin.y;
+    float zComponent = ray.direction.z * newOrigin.z;
+    float b = 2.0f * (xComponent + yComponent + zComponent);
+
+    // calculate c
+    float xOrigin = (newOrigin.x * newOrigin.x);
+    float yOrigin = (newOrigin.y * newOrigin.y);
+    float zOrigin = (newOrigin.z * newOrigin.z);
+    float rSquared = (sphere.radius * sphere.radius);
+    float c = xOrigin + yOrigin + zOrigin - rSquared;
+
+
+    // discriminant test: if its < 0 -> no solution
+    float discriminant = b * b - 4.0f * a * c;
+    if (discriminant < 0) {
+        return false;
+    }
+
+    // retrieving solutions using the quadaratic equation
+    float numeratorOne = -b + glm::sqrt(discriminant);
+    float numeratorTwo = -b - glm::sqrt(discriminant);
+    float denominaotor = 2.0f * a;
+    float solutionOne = numeratorOne / denominaotor;
+    float solutionTwo = numeratorTwo / denominaotor;
+
+    // if we have 2 solutions
+    if (solutionOne > 0 && solutionTwo > 0) {
+        // find the closest intersection point
+        float closestT = glm::min(solutionOne, solutionTwo);
+        if (closestT < ray.t) {
+            // update closest t
+            ray.t = closestT;
+
+            // update material
             hitInfo.material = sphere.material;
-            glm::vec3 p = ray.origin + t1 * ray.direction;
-            hitInfo.normal = glm::normalize(p - sphere.center);
+
+            //update normal
+            glm::vec3 intersectionPoint = ray.origin + ray.t * ray.direction;
+            glm::vec3 normalIntersection = glm::normalize(intersectionPoint - sphere.center);
+            hitInfo.normal = normalIntersection;
         }
-        if (ray.t == t2) {
+        // intersection sucess
+        return true;
+    }
+
+    // if we have one solution: case 1
+    if (solutionOne > 0) {
+        // find closest t
+        if (solutionOne < ray.t) {
+            // update closest t
+            ray.t = solutionOne;
+
+            // update material
             hitInfo.material = sphere.material;
-            glm::vec3 p = ray.origin + t2 * ray.direction;
-            hitInfo.normal = glm::normalize(p - sphere.center);
+
+            //update normal
+            glm::vec3 intersectionPoint = ray.origin + ray.t * ray.direction;
+            glm::vec3 normalIntersection = glm::normalize(intersectionPoint - sphere.center);
+            hitInfo.normal = normalIntersection;
         }
         return true;
     }
-    //No intersection return false
+
+
+    // if we have one solution: case 2
+    if (solutionTwo > 0) {
+        // find closest t
+        if (solutionTwo < ray.t) {
+            // update closest t
+            ray.t = solutionTwo;
+
+            // update material
+            hitInfo.material = sphere.material;
+
+            //update normal
+            glm::vec3 intersectionPoint = ray.origin + ray.t * ray.direction;
+            glm::vec3 normalIntersection = glm::normalize(intersectionPoint - sphere.center);
+            hitInfo.normal = normalIntersection;
+        }
+        return true;
+    }
+
+    // no intersection occurred
     return false;
 }
 
