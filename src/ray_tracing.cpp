@@ -155,6 +155,7 @@ bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const gl
     if (intersectPlaneSuccess) {
         glm::vec3 n = planeTriangle.normal;
         glm::vec3 p = ray.origin + ray.direction * ray.t;
+
         // check if point inside the triangle
         intersectTriangleSuccess = pointInTriangle(v0, v1, v2, n, p);
 
@@ -165,7 +166,7 @@ bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const gl
                 ray.t = previousT;
             }
 
-            // update the plane for hitInfo
+            // update the normal for hitInfo
             if (glm::dot(planeTriangle.normal, ray.direction) < 0) {
                 hitInfo.normal = planeTriangle.normal;
             }
@@ -173,14 +174,14 @@ bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const gl
                 hitInfo.normal = -planeTriangle.normal;
             }
 
-            // intersection - sucessful
+            // intersection sucessful
             return true;
         }
     }
 
     // no intersection/the point is not inside the triangle -> roll back 
     ray.t = previousT;
-    // intersection of ray triangle - fail
+    // intersection of ray triangle failed
     return intersectTriangleSuccess;
 }
 
@@ -351,6 +352,7 @@ bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray)
             // else the intersection is infront. update ray.t as tIn (where the ray hits the box) and return true
             ray.t = tIn;
         }
+
         return true;
     }
 

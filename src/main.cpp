@@ -40,7 +40,6 @@ enum class ViewMode {
     RayTracing = 1
 };
 
-
 /*
 * Calculates the diffuse term of the phong model using:
 *
@@ -71,9 +70,6 @@ static glm::vec3 calculateDiffuse(PointLight pointlight, HitInfo hitInfo, Ray ra
     // if light infront, find diffuse component
     if (dotProductNormailLightVector > 0) {
         glm::vec3 diffuse = hitInfo.material.kd * dotProductNormailLightVector;
-        //diffuse.x *= lightColor.x;
-        //diffuse.y *= lightColor.y;
-        //diffuse.z *= lightColor.z;
         return diffuse;
     }
 
@@ -157,6 +153,7 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
             } else if (std::holds_alternative<SegmentLight>(light)) {
                 const SegmentLight segmentlight = std::get<SegmentLight>(light);
                 
+                // divide segment lights into 100 samples
                 int sampleSize = 100;
                 float alpha = 0.01f;
 
@@ -169,24 +166,27 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
             
                 for (int i = 0; i < sampleSize; i++) {
                     glm::vec3 currPos = lightZeroPos + (float) i * x;
+
                     // linear interpolation
                     glm::vec3 currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor);
+
                     PointLight currPointLight = { currPos, currColor };
-                    finalColor += currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray) * alpha;
-                    finalColor += currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray)  * alpha;
+
+                    finalColor += (currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray) * alpha);
+                    finalColor += (currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray) * alpha);
                 }
 
                 // parallelogram light
             } else if (std::holds_alternative<ParallelogramLight>(light)) {
                 const ParallelogramLight parallelogramlight = std::get<ParallelogramLight>(light);
 
+                // divide parallelogram lights into 10 samples for x and y
                 int sampleSize = 10;
                 float alpha = 0.1f;
                 
                 glm::vec3 vertexZero = parallelogramlight.v0; // v0
                 glm::vec3 vertexOne = vertexZero + parallelogramlight.edge01; // vo + v1
                 glm::vec3 vertexTwo = vertexZero + parallelogramlight.edge02; // vo + v2
-                glm::vec3 vertexThree = vertexOne + parallelogramlight.edge02; // vo + v1 + v2
 
                 glm::vec3 colorZero = parallelogramlight.color0;
                 glm::vec3 colorOne = parallelogramlight.color1;
