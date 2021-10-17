@@ -131,12 +131,9 @@ static bool hitLight(const BoundingVolumeHierarchy& bvh, Ray ray, glm::vec3 ligh
 }
 */
 
-static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray)
-{
+static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray, int level, glm::vec3 finalColor, int maxLevel) {
     HitInfo hitInfo;
     if (bvh.intersect(ray, hitInfo)) {
-  
-        glm::vec3 finalColor{ 0.0f };
 
         // for all the lights in the scene
         for (const auto& light : scene.lights) {
@@ -149,10 +146,11 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
                 finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
 
 
-            // segment light
-            } else if (std::holds_alternative<SegmentLight>(light)) {
+                // segment light
+            }
+            else if (std::holds_alternative<SegmentLight>(light)) {
                 const SegmentLight segmentlight = std::get<SegmentLight>(light);
-                
+
                 // divide segment lights into 100 samples
                 int sampleSize = 100;
                 float alpha = 0.01f;
@@ -162,10 +160,10 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
                 glm::vec3 lightZeroColor = segmentlight.color0;
                 glm::vec3 lightOneColor = segmentlight.color1;
 
-                glm::vec3 x = (lightOnePos - lightZeroPos) / (float) sampleSize;
-            
+                glm::vec3 x = (lightOnePos - lightZeroPos) / (float)sampleSize;
+
                 for (int i = 0; i < sampleSize; i++) {
-                    glm::vec3 currPos = lightZeroPos + (float) i * x;
+                    glm::vec3 currPos = lightZeroPos + (float)i * x;
 
                     // linear interpolation
                     glm::vec3 currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor);
@@ -177,13 +175,14 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
                 }
 
                 // parallelogram light
-            } else if (std::holds_alternative<ParallelogramLight>(light)) {
+            }
+            else if (std::holds_alternative<ParallelogramLight>(light)) {
                 const ParallelogramLight parallelogramlight = std::get<ParallelogramLight>(light);
 
                 // divide parallelogram lights into 10 samples for x and y
                 int sampleSize = 10;
                 float alpha = 0.1f;
-                
+
                 glm::vec3 vertexZero = parallelogramlight.v0; // v0
                 glm::vec3 vertexOne = vertexZero + parallelogramlight.edge01; // vo + v1
                 glm::vec3 vertexTwo = vertexZero + parallelogramlight.edge02; // vo + v2
@@ -193,8 +192,8 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
                 glm::vec3 colorTwo = parallelogramlight.color2;
                 glm::vec3 colorThree = parallelogramlight.color3;
 
-                glm::vec3 x_step = (vertexOne - vertexZero) / (float) sampleSize;
-                glm::vec3 y_step = (vertexTwo - vertexZero) / (float) sampleSize;
+                glm::vec3 x_step = (vertexOne - vertexZero) / (float)sampleSize;
+                glm::vec3 y_step = (vertexTwo - vertexZero) / (float)sampleSize;
 
                 // bilinear interpolation
                 // f(0,0)(1-x)(1-y) + f(0,1)(1-x)y + f(1,0) x(1-y) + f(1,1)xy
@@ -217,16 +216,36 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
                 }
             }
         }
+        drawRay(ray, finalColor);
+        if (glm::length(hitInfo.material.ks) > 1E-6 && level < maxLevel) {
+            
+            glm::vec3 reflecedVector = 2 * glm::dot(-ray.direction, glm::normalize(hitInfo.normal)) * glm::normalize(hitInfo.normal) + ray.direction;
+
+            Ray reflectedRay = { ray.origin + ray.direction * ray.t, glm::normalize(reflecedVector) };
+            
+            /*if (glm::dot(reflectedRay.direction, hitInfo.normal) > 0) {
+                finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, glm::vec3{ 0,0,0 }, maxLevel));
+            }*/
+
+            finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, glm::vec3{ 0,0,0 }, maxLevel));
+        }
 
         // drawing the camera ray using final color
-        drawRay(ray, finalColor);
+        //drawRay(ray, finalColor);
         return finalColor;
-    } else {
+    }
+    else {
         // Draw a red debug ray if the ray missed.
         drawRay(ray, glm::vec3(1.0f, 0.0f, 0.0f));
         // Set the color of the pixel to black if the ray misses.
         return glm::vec3(0.0f);
     }
+}
+
+
+static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray)
+{
+    return recursive_ray_tracer(scene, bvh, ray, 0, glm::vec3{ 0,0,0 },6);
 
     // Lights are stored in a single array (scene.lights) where each item can be either a PointLight, SegmentLight or ParallelogramLight.
     // You can check whether a light at index i is a PointLight using std::holds_alternative:
