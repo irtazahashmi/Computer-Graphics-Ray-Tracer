@@ -56,8 +56,6 @@ struct ParallelogramLight {
     glm::vec3 v0; // v0
     glm::vec3 edge01, edge02; // edges from v0 to v1, and from v0 to v2
     glm::vec3 color0, color1, color2, color3;
-
-
 };
 
 struct Scene {

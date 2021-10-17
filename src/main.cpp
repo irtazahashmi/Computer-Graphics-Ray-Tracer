@@ -32,7 +32,7 @@ DISABLE_WARNINGS_POP()
 #include <variant>
 
 // This is the main application. The code in here does not need to be modified.
-constexpr glm::ivec2 windowResolution { 800, 800 };
+constexpr glm::ivec2 windowResolution { 1600, 1600 }; // window resolution
 const std::filesystem::path dataPath { DATA_DIR };
 
 enum class ViewMode {
@@ -40,15 +40,187 @@ enum class ViewMode {
     RayTracing = 1
 };
 
+/*
+* Calculates the diffuse term of the phong model using:
+*
+*           diffuse = kd * dot(N, L) 
+* 
+* where N is the normal and L is the light direction.
+* 
+* @param a point light, the hitInfo object and the ray
+* @return a vector of the diffuse component of the phong model
+*/
+static glm::vec3 calculateDiffuse(PointLight pointlight, HitInfo hitInfo, Ray ray) {
+    // light attributes
+    glm::vec3 lightColor = pointlight.color;
+    glm::vec3 lightPos = pointlight.position;
+
+    // intersection point
+    glm::vec3 hitPos = ray.origin + ray.t * ray.direction;
+
+    // calculate light direction
+    glm::vec3 lightDir = lightPos - hitPos;
+    lightDir = glm::normalize(lightDir);
+
+    // normal
+    glm::vec3 normalizedNormal = glm::normalize(hitInfo.normal);
+
+    float dotProductNormailLightVector = glm::dot(normalizedNormal, lightDir);
+
+    // if light infront, find diffuse component
+    if (dotProductNormailLightVector > 0) {
+        glm::vec3 diffuse = hitInfo.material.kd * dotProductNormailLightVector;
+        return diffuse;
+    }
+
+    // else return black
+    return glm::vec3{ 0.0f };
+}
+
+/*
+* Calculates the specular term of the phong model using:
+*
+*           specular = ks * dot(N, H)^shininess
+*
+* where N is the normal and H is the reflection vector
+*
+* @param a point light, the hitInfo object and the ray
+* @return a vector of the specular component of the phong model
+*/
+static glm::vec3 calculateSpecular(PointLight pointlight, HitInfo hitInfo, Ray ray) {
+    // light attributes
+    glm::vec3 lightColor = pointlight.color;
+    glm::vec3 lightPos = pointlight.position;
+
+    // intersection point
+    glm::vec3 hitPos = ray.origin + ray.t * ray.direction;
+
+    // light dir
+    glm::vec3 lightDir = lightPos - hitPos;
+    lightDir = glm::normalize(lightDir);
+
+    //normal
+    glm::vec3 normalizedNormal = glm::normalize(hitInfo.normal);
+
+    // reflection vec
+    glm::vec3 H = 2 * glm::dot(lightDir, normalizedNormal) * normalizedNormal - lightDir;
+    H = glm::normalize(H);
+
+    //calculate specular
+    float shininess = hitInfo.material.shininess;
+    glm::vec3 ks = hitInfo.material.ks;
+    glm::vec3 specular = ks * glm::pow(glm::max(glm::dot(normalizedNormal, H), 0.0f), shininess);
+    return specular;
+}
+
+/*
+static bool hitLight(const BoundingVolumeHierarchy& bvh, Ray ray, glm::vec3 lightPos) {
+    Ray tempLightRay;
+    tempLightRay.origin = lightPos;
+    tempLightRay.direction = glm::normalize((ray.origin + ray.t * ray.direction) - tempLightRay.origin);
+
+    HitInfo hitInfo;
+    bvh.intersect(tempLightRay, hitInfo);
+
+    if (glm::length(
+        (tempLightRay.origin + tempLightRay.t * tempLightRay.direction)
+        - (ray.origin + ray.t * ray.direction)) < 1E-6) {
+        return true;
+    }
+    return false;
+}
+*/
 
 static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray)
 {
     HitInfo hitInfo;
     if (bvh.intersect(ray, hitInfo)) {
-        // Draw a white debug ray if the ray hits.
-        drawRay(ray, glm::vec3(1.0f));
-        // Set the color of the pixel to white if the ray hits.
-        return glm::vec3(1.0f);
+  
+        glm::vec3 finalColor{ 0.0f };
+
+        // for all the lights in the scene
+        for (const auto& light : scene.lights) {
+
+            // point light
+            if (std::holds_alternative<PointLight>(light)) {
+                const PointLight pointlight = std::get<PointLight>(light);
+
+                finalColor += pointlight.color * calculateDiffuse(pointlight, hitInfo, ray);
+                finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
+
+
+            // segment light
+            } else if (std::holds_alternative<SegmentLight>(light)) {
+                const SegmentLight segmentlight = std::get<SegmentLight>(light);
+                
+                // divide segment lights into 100 samples
+                int sampleSize = 100;
+                float alpha = 0.01f;
+
+                glm::vec3 lightZeroPos = segmentlight.endpoint0;
+                glm::vec3 lightOnePos = segmentlight.endpoint1;
+                glm::vec3 lightZeroColor = segmentlight.color0;
+                glm::vec3 lightOneColor = segmentlight.color1;
+
+                glm::vec3 x = (lightOnePos - lightZeroPos) / (float) sampleSize;
+            
+                for (int i = 0; i < sampleSize; i++) {
+                    glm::vec3 currPos = lightZeroPos + (float) i * x;
+
+                    // linear interpolation
+                    glm::vec3 currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor);
+
+                    PointLight currPointLight = { currPos, currColor };
+
+                    finalColor += (currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray) * alpha);
+                    finalColor += (currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray) * alpha);
+                }
+
+                // parallelogram light
+            } else if (std::holds_alternative<ParallelogramLight>(light)) {
+                const ParallelogramLight parallelogramlight = std::get<ParallelogramLight>(light);
+
+                // divide parallelogram lights into 10 samples for x and y
+                int sampleSize = 10;
+                float alpha = 0.1f;
+                
+                glm::vec3 vertexZero = parallelogramlight.v0; // v0
+                glm::vec3 vertexOne = vertexZero + parallelogramlight.edge01; // vo + v1
+                glm::vec3 vertexTwo = vertexZero + parallelogramlight.edge02; // vo + v2
+
+                glm::vec3 colorZero = parallelogramlight.color0;
+                glm::vec3 colorOne = parallelogramlight.color1;
+                glm::vec3 colorTwo = parallelogramlight.color2;
+                glm::vec3 colorThree = parallelogramlight.color3;
+
+                glm::vec3 x_step = (vertexOne - vertexZero) / (float) sampleSize;
+                glm::vec3 y_step = (vertexTwo - vertexZero) / (float) sampleSize;
+
+                // bilinear interpolation
+                // f(0,0)(1-x)(1-y) + f(0,1)(1-x)y + f(1,0) x(1-y) + f(1,1)xy
+                for (int i = 0; i < sampleSize; i++) {
+                    for (int j = 0; j < sampleSize; j++) {
+
+                        glm::vec3 currColor{ 0.f };
+                        currColor += (colorZero * (1 - i * alpha) * (1 - j * alpha));
+                        currColor += (colorOne * (1 - i * alpha) * (j * alpha));
+                        currColor += (colorTwo * (i * alpha) * (1 - j * alpha));
+                        currColor += (colorThree * (i * alpha) * (j * alpha));
+                        currColor *= (alpha * alpha);
+
+                        glm::vec3 currPos = vertexZero + ((float)i * x_step + (float)j * y_step);
+                        PointLight currPointLight = { currPos, currColor };
+
+                        finalColor += currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray);
+                        finalColor += currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray);
+                    }
+                }
+            }
+        }
+
+        // drawing the camera ray using final color
+        drawRay(ray, finalColor);
+        return finalColor;
     } else {
         // Draw a red debug ray if the ray missed.
         drawRay(ray, glm::vec3(1.0f, 0.0f, 0.0f));
