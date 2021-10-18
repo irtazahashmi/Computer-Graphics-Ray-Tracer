@@ -183,8 +183,10 @@ void drawRay(const Ray& ray, const glm::vec3& color)
     glVertex3fv(glm::value_ptr(hitPoint));
     glEnd();
 
-    if (hit)
-        drawSphere(hitPoint, 0.005f, color);
+    if (hit) {
+        glm::vec3 green = { 0.0f, 1.0f, 0.0f };
+        drawSphere(hitPoint, 0.005f, green);
+    }
 
     glPopAttrib();
 }

@@ -62,7 +62,7 @@ static glm::vec3 calculateDiffuse(PointLight pointlight, HitInfo hitInfo, Ray ra
     glm::vec3 lightDir = lightPos - hitPos;
     lightDir = glm::normalize(lightDir);
 
-    // normal
+    // normalized normal
     glm::vec3 normalizedNormal = glm::normalize(hitInfo.normal);
 
     float dotProductNormailLightVector = glm::dot(normalizedNormal, lightDir);
@@ -114,40 +114,67 @@ static glm::vec3 calculateSpecular(PointLight pointlight, HitInfo hitInfo, Ray r
 }
 
 /*
-static bool hitLight(const BoundingVolumeHierarchy& bvh, Ray ray, glm::vec3 lightPos) {
+* Checks if the light ray has the same intersection point as the ray. If it does, then
+* that point is lit, else it is in shadow.
+
+* @param bvh, the ray and the light position
+* @return if the pixel is lit (true) or in shadow (false)
+*/
+static bool hitLightSuccess(const BoundingVolumeHierarchy& bvh, Ray ray, glm::vec3 lightPos) {
+    // create a temporary light ray
     Ray tempLightRay;
     tempLightRay.origin = lightPos;
-    tempLightRay.direction = glm::normalize((ray.origin + ray.t * ray.direction) - tempLightRay.origin);
+    glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+    tempLightRay.direction = glm::normalize(intersectionPointRay - tempLightRay.origin);
 
+    // intersect the light ray with the bvh
     HitInfo hitInfo;
     bvh.intersect(tempLightRay, hitInfo);
 
-    if (glm::length(
-        (tempLightRay.origin + tempLightRay.t * tempLightRay.direction)
-        - (ray.origin + ray.t * ray.direction)) < 1E-6) {
+    glm::vec3 intersectionPointLight = tempLightRay.origin + tempLightRay.t * tempLightRay.direction;
+    intersectionPointRay = ray.origin + ray.t * ray.direction;
+
+
+    float epsilon = (float) 1E-6;
+    // if light intersection point and ray intersection point the same -> we can see the light -> lit
+    if (glm::length(intersectionPointLight - intersectionPointRay) < epsilon) {
         return true;
     }
+
+    // else there is darkness -> we can't see light from the pixel
+    // debug shadow ray
+    Ray shadowRay;
+    shadowRay.origin = intersectionPointRay;
+    shadowRay.direction = -tempLightRay.direction;
+    HitInfo shadowRayInfo;
+    bvh.intersect(shadowRay, shadowRayInfo);
+    drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+
     return false;
 }
-*/
 
-static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray, int level, glm::vec3 finalColor, int maxLevel) {
+static glm::vec3 recursiveRayTracer(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray, int level, int maxLevel) {
+    
     HitInfo hitInfo;
     if (bvh.intersect(ray, hitInfo)) {
+
+        glm::vec3 finalColor{ 0.0f };
 
         // for all the lights in the scene
         for (const auto& light : scene.lights) {
 
-            // point light
+            // POINT LIGHT
             if (std::holds_alternative<PointLight>(light)) {
                 const PointLight pointlight = std::get<PointLight>(light);
 
-                finalColor += pointlight.color * calculateDiffuse(pointlight, hitInfo, ray);
-                finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
-
-
-                // segment light
+                // Hard shdow - if the point is in light, calculate color, else in shadow.
+                if (hitLightSuccess(bvh, ray, pointlight.position)) {
+                    finalColor += pointlight.color * calculateDiffuse(pointlight, hitInfo, ray);
+                    finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
+                }
+   
             }
+            // SEGMENT LIGHT
             else if (std::holds_alternative<SegmentLight>(light)) {
                 const SegmentLight segmentlight = std::get<SegmentLight>(light);
 
@@ -160,22 +187,25 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                 glm::vec3 lightZeroColor = segmentlight.color0;
                 glm::vec3 lightOneColor = segmentlight.color1;
 
-                glm::vec3 x = (lightOnePos - lightZeroPos) / (float)sampleSize;
+                glm::vec3 x_step = (lightOnePos - lightZeroPos) / (float)sampleSize;
 
                 for (int i = 0; i < sampleSize; i++) {
-                    glm::vec3 currPos = lightZeroPos + (float)i * x;
+                    glm::vec3 currPos = lightZeroPos + (float) i * x_step;
 
                     // linear interpolation
                     glm::vec3 currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor);
 
                     PointLight currPointLight = { currPos, currColor };
 
-                    finalColor += (currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray) * alpha);
-                    finalColor += (currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray) * alpha);
+                    // SOFT SHADOWS - treat each step light as point light
+                    if (hitLightSuccess(bvh, ray, currPointLight.position)) {
+                        finalColor += (currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray) * alpha);
+                        finalColor += (currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray) * alpha);
+                    }
                 }
 
-                // parallelogram light
             }
+            // PARALLELOGRAM LIGHT
             else if (std::holds_alternative<ParallelogramLight>(light)) {
                 const ParallelogramLight parallelogramlight = std::get<ParallelogramLight>(light);
 
@@ -216,22 +246,24 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                 }
             }
         }
+
+        // drawing the camera ray using the final color
         drawRay(ray, finalColor);
-        if (glm::length(hitInfo.material.ks) > 1E-6 && level < maxLevel) {
-            
-            glm::vec3 reflecedVector = 2 * glm::dot(-ray.direction, glm::normalize(hitInfo.normal)) * glm::normalize(hitInfo.normal) + ray.direction;
+        
+        // everytime the ray intersects a specular surface, trace another ray in the mirror-reflection direction
+        float epsilon = (float) 1E-6;
+        if (glm::length(hitInfo.material.ks) > epsilon && level < maxLevel) {
 
-            Ray reflectedRay = { ray.origin + ray.direction * ray.t, glm::normalize(reflecedVector) };
-            
-            /*if (glm::dot(reflectedRay.direction, hitInfo.normal) > 0) {
-                finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, glm::vec3{ 0,0,0 }, maxLevel));
-            }*/
+            glm::vec3 hitNormal = glm::normalize(hitInfo.normal);
+            glm::vec3 reflectedVector = 2 * glm::dot(-ray.direction, hitNormal) * hitNormal + ray.direction;
+            reflectedVector = glm::normalize(reflectedVector);
 
-            finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, glm::vec3{ 0,0,0 }, maxLevel));
+            glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
+            Ray reflectedRay = { intersectionPoint,  reflectedVector };
+
+            finalColor = hitInfo.material.ks * (recursiveRayTracer(scene, bvh, reflectedRay, level + 1, maxLevel));
         }
 
-        // drawing the camera ray using final color
-        //drawRay(ray, finalColor);
         return finalColor;
     }
     else {
@@ -245,7 +277,9 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
 
 static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray)
 {
-    return recursive_ray_tracer(scene, bvh, ray, 0, glm::vec3{ 0,0,0 },6);
+    int startLevel = 0;
+    int maxLevel = 6;
+    return recursiveRayTracer(scene, bvh, ray, startLevel, maxLevel);
 
     // Lights are stored in a single array (scene.lights) where each item can be either a PointLight, SegmentLight or ParallelogramLight.
     // You can check whether a light at index i is a PointLight using std::holds_alternative:
@@ -387,9 +421,11 @@ int main(int argc, char** argv)
                 // Perform a new render and measure the time it took to generate the image.
                 using clock = std::chrono::high_resolution_clock;
                 const auto start = clock::now();
+                std::cout << "Rendering in progress..." << std::endl;
                 renderRayTracing(scene, camera, bvh, screen);
                 const auto end = clock::now();
                 std::cout << "Time to render image: " << std::chrono::duration<float, std::milli>(end - start).count() << " milliseconds" << std::endl;
+
 
                 // Store the new image.
                 screen.writeBitmapToFile(outPath);

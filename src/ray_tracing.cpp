@@ -182,7 +182,7 @@ bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const gl
     // no intersection/the point is not inside the triangle -> roll back 
     ray.t = previousT;
     // intersection of ray triangle failed
-    return intersectTriangleSuccess;
+    return false;
 }
 
 /*
