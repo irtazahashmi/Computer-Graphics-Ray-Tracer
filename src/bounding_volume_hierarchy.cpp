@@ -1,5 +1,11 @@
 #include "bounding_volume_hierarchy.h"
 #include "draw.h"
+#include <iostream>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec4.hpp>
 
 
 BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
@@ -39,15 +45,38 @@ bool BoundingVolumeHierarchy::intersect(Ray& ray, HitInfo& hitInfo) const
     bool hit = false;
     // Intersect with all triangles of all meshes.
     for (const auto& mesh : m_pScene->meshes) {
+            float t = ray.t;
         for (const auto& tri : mesh.triangles) {
             const auto v0 = mesh.vertices[tri[0]];
             const auto v1 = mesh.vertices[tri[1]];
             const auto v2 = mesh.vertices[tri[2]];
             if (intersectRayWithTriangle(v0.position, v1.position, v2.position, ray, hitInfo)) {
-                hitInfo.material = mesh.material;
-                hit = true;
+                if (ray.t < t) {
+                    hitInfo.material = mesh.material;
+                    hit = true;
+                    hitInfo.v0 = v0;
+                    hitInfo.v1 = v1;
+                    hitInfo.v2 = v2;
+                }
             }
         }
+
+        drawRay({ hitInfo.v0.position, hitInfo.v0.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
+        drawRay({ hitInfo.v1.position, hitInfo.v1.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
+        drawRay({ hitInfo.v2.position, hitInfo.v2.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
+
+        glm::vec3 p = ray.origin + ray.t * ray.direction;
+        float A = glm::length(glm::cross(hitInfo.v1.position - p, hitInfo.v2.position - p)) / 2;
+        float B = glm::length(glm::cross(hitInfo.v0.position - p, hitInfo.v2.position - p)) / 2;
+        float C = glm::length(glm::cross(hitInfo.v0.position - p, hitInfo.v1.position - p)) / 2;
+        float totalArea = glm::length(glm::cross(hitInfo.v2.position - hitInfo.v0.position, hitInfo.v1.position - hitInfo.v0.position)) / 2;
+        float alpha = A / totalArea;
+        float beta = B / totalArea;
+        float gamma = C / totalArea;
+        hitInfo.normal = alpha * hitInfo.v0.normal + beta * hitInfo.v1.normal + gamma * hitInfo.v2.normal;
+
+        drawRay({ p, hitInfo.normal, ray.t }, glm::vec3(0.0f, 0.0f, 1.0f));
+
     }
     // Intersect with spheres.
     for (const auto& sphere : m_pScene->spheres)

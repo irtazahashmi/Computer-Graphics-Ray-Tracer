@@ -232,6 +232,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
 
         // drawing the camera ray using final color
         //drawRay(ray, finalColor);
+
         return finalColor;
     }
     else {
@@ -241,7 +242,6 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
         return glm::vec3(0.0f);
     }
 }
-
 
 static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray)
 {
