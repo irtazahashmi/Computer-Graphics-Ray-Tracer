@@ -135,21 +135,16 @@ static bool hitLightSuccess(const BoundingVolumeHierarchy& bvh, Ray ray, glm::ve
     intersectionPointRay = ray.origin + ray.t * ray.direction;
 
 
-    float epsilon = (float) 1E-6;
+    float epsilon = (float) 1E-4;;
     // if light intersection point and ray intersection point the same -> we can see the light -> lit
-    if (glm::length(intersectionPointLight - intersectionPointRay) < epsilon) {
+    glm::vec3 differenceIntersection = intersectionPointLight - intersectionPointRay;
+    if (differenceIntersection.x < epsilon && 
+        differenceIntersection.y < epsilon && 
+        differenceIntersection.z < epsilon) {
         return true;
     }
 
     // else there is darkness -> we can't see light from the pixel
-    // debug shadow ray
-    Ray shadowRay;
-    shadowRay.origin = intersectionPointRay;
-    shadowRay.direction = -tempLightRay.direction;
-    HitInfo shadowRayInfo;
-    bvh.intersect(shadowRay, shadowRayInfo);
-    drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
-
     return false;
 }
 
@@ -172,16 +167,27 @@ static glm::vec3 recursiveRayTracer(const Scene& scene, const BoundingVolumeHier
                     finalColor += pointlight.color * calculateDiffuse(pointlight, hitInfo, ray);
                     finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
                 }
+                else {
+                    // debug shadow ray: shadow ray occluded - hits something other than light -> red ray
+                    glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+
+                    Ray shadowRay;
+                    shadowRay.origin = intersectionPointRay;
+                    shadowRay.direction = -(intersectionPointRay - pointlight.position);
+                    HitInfo shadowRayInfo;
+                    bvh.intersect(shadowRay, shadowRayInfo);
+                    drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+                }
    
             }
             // SEGMENT LIGHT
             else if (std::holds_alternative<SegmentLight>(light)) {
                 const SegmentLight segmentlight = std::get<SegmentLight>(light);
 
-                // divide segment lights into 100 samples
-                int sampleSize = 100;
-                float alpha = 0.01f;
-
+                // divide segment lights into 20 samples
+                int sampleSize = 20;
+                float alpha = 0.05f;
+                
                 glm::vec3 lightZeroPos = segmentlight.endpoint0;
                 glm::vec3 lightOnePos = segmentlight.endpoint1;
                 glm::vec3 lightZeroColor = segmentlight.color0;
@@ -189,7 +195,7 @@ static glm::vec3 recursiveRayTracer(const Scene& scene, const BoundingVolumeHier
 
                 glm::vec3 x_step = (lightOnePos - lightZeroPos) / (float)sampleSize;
 
-                for (int i = 0; i < sampleSize; i++) {
+                for (int i = 0; i <= sampleSize; i++) {
                     glm::vec3 currPos = lightZeroPos + (float) i * x_step;
 
                     // linear interpolation
@@ -201,6 +207,27 @@ static glm::vec3 recursiveRayTracer(const Scene& scene, const BoundingVolumeHier
                     if (hitLightSuccess(bvh, ray, currPointLight.position)) {
                         finalColor += (currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray) * alpha);
                         finalColor += (currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray) * alpha);
+
+                        // debug ray: segment lights
+                        // drawing all the sampled rays that hit the ligth with their color
+                        Ray tempLightRay;
+                        tempLightRay.origin = currPos;
+                        glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+                        tempLightRay.direction = glm::normalize(intersectionPointRay - tempLightRay.origin);
+                        HitInfo hitInfo;
+                        bvh.intersect(tempLightRay, hitInfo);
+                        drawRay(tempLightRay, currColor);
+                    }
+                    else {
+                        // if the rays are not hitting the light, we make them red
+                        glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+
+                        Ray shadowRay;
+                        shadowRay.origin = intersectionPointRay;
+                        shadowRay.direction = -(intersectionPointRay - currPos);
+                        HitInfo shadowRayInfo;
+                        bvh.intersect(shadowRay, shadowRayInfo);
+                        drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
                     }
                 }
 
@@ -239,6 +266,7 @@ static glm::vec3 recursiveRayTracer(const Scene& scene, const BoundingVolumeHier
 
                         glm::vec3 currPos = vertexZero + ((float)i * x_step + (float)j * y_step);
                         PointLight currPointLight = { currPos, currColor };
+
 
                         finalColor += currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray);
                         finalColor += currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray);
