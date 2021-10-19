@@ -32,7 +32,7 @@ DISABLE_WARNINGS_POP()
 #include <variant>
 
 // This is the main application. The code in here does not need to be modified.
-constexpr glm::ivec2 windowResolution { 1600, 1600 }; // window resolution
+constexpr glm::ivec2 windowResolution { 800, 800 }; // window resolution
 const std::filesystem::path dataPath { DATA_DIR };
 
 enum class ViewMode {
@@ -254,22 +254,49 @@ static glm::vec3 recursiveRayTracer(const Scene& scene, const BoundingVolumeHier
 
                 // bilinear interpolation
                 // f(0,0)(1-x)(1-y) + f(0,1)(1-x)y + f(1,0) x(1-y) + f(1,1)xy
-                for (int i = 0; i < sampleSize; i++) {
-                    for (int j = 0; j < sampleSize; j++) {
+                for (int i = 0; i <= sampleSize; i++) {
+                    for (int j = 0; j <= sampleSize; j++) {
 
                         glm::vec3 currColor{ 0.f };
                         currColor += (colorZero * (1 - i * alpha) * (1 - j * alpha));
                         currColor += (colorOne * (1 - i * alpha) * (j * alpha));
                         currColor += (colorTwo * (i * alpha) * (1 - j * alpha));
                         currColor += (colorThree * (i * alpha) * (j * alpha));
+                        
+                        // before we averrage, we save the color to show in debug ray
+                        glm::vec3 debugRayColor = currColor;
+
                         currColor *= (alpha * alpha);
 
                         glm::vec3 currPos = vertexZero + ((float)i * x_step + (float)j * y_step);
                         PointLight currPointLight = { currPos, currColor };
 
+                        if (hitLightSuccess(bvh, ray, currPointLight.position)) {
+                            finalColor += currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray);
+                            finalColor += currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray);
+     
 
-                        finalColor += currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray);
-                        finalColor += currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray);
+                            // debug ray: parallelogram lights
+                            // drawing all the sampled rays that hit the ligth with their color
+                            Ray tempLightRay;
+                            tempLightRay.origin = currPos;
+                            glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+                            tempLightRay.direction = glm::normalize(intersectionPointRay - tempLightRay.origin);
+                            HitInfo hitInfo;
+                            bvh.intersect(tempLightRay, hitInfo);
+                            drawRay(tempLightRay, debugRayColor);
+                        }
+                        else {
+                            // if the rays are not hitting the light, we make them red
+                            glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+
+                            Ray shadowRay;
+                            shadowRay.origin = intersectionPointRay;
+                            shadowRay.direction = -(intersectionPointRay - currPos);
+                            HitInfo shadowRayInfo;
+                            bvh.intersect(shadowRay, shadowRayInfo);
+                            drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+                        }       
                     }
                 }
             }
