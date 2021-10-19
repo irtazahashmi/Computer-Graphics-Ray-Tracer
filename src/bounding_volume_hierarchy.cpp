@@ -21,7 +21,7 @@ void splitBox(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>>& triangle
         std::tuple<glm::vec3, glm::vec3, glm::vec3, int> temp = 
             { get<0>(triangles[binary_tree[index_parent_node].indices[i]]), 
             get<1>(triangles[binary_tree[index_parent_node].indices[i]]), 
-            get<2>(triangles[binary_tree[index_parent_node].indices[i]]), i };
+            get<2>(triangles[binary_tree[index_parent_node].indices[i]]), binary_tree[index_parent_node].indices[i] };
         parentTriangles.push_back(temp);
     }
 
@@ -230,7 +230,7 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
     root.indices = root_indices;
     int i = 0;
     binary_tree.push_back(root);
-    recursiveStepBvh(triangles, i, 0, 1);
+    recursiveStepBvh(triangles, i, 0, 2);
 
     /*for (int i = 0; i < binary_tree.size(); i++) {
         std::cout << i << " -- " << binary_tree[i].indices.size() << " " << binary_tree[i].isLeaf << " Lx " << binary_tree[i].data.lower.x 
@@ -261,13 +261,13 @@ void BoundingVolumeHierarchy::debugDraw(int level)
     for (Node node : binary_tree) {
         AxisAlignedBox aabb{ node.data };
         //drawAABB(aabb, DrawMode::Wireframe);
-        //if (node.isLeaf) {
-            //drawAABB(aabb, DrawMode::Filled, glm::vec3(0.05f, 1.0f, 0.05f), 0.1f);
+        if (node.isLeaf) {
+            drawAABB(aabb, DrawMode::Filled, glm::vec3(0.05f, 1.0f, 0.05f), 0.1f);
             //std::cout << lcnt << "---------------" << std::endl;
             //std::cout << aabb.upper.x << " " << aabb.upper.y << " " << aabb.upper.z << std::endl;
             //std::cout << aabb.lower.x << " " << aabb.lower.y << " " << aabb.lower.z << std::endl << std::endl;
             //lcnt++;
-        //}
+        }
         //cnt++;
         //}
     }
