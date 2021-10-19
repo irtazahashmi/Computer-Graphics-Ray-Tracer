@@ -1,5 +1,11 @@
 #include "bounding_volume_hierarchy.h"
 #include "draw.h"
+#include <iostream>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec4.hpp>
 
 
 BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
@@ -30,6 +36,7 @@ void BoundingVolumeHierarchy::debugDraw(int level)
 }
 
 
+
 // Return true if something is hit, returns false otherwise. Only find hits if they are closer than t stored
 // in the ray and if the intersection is on the correct side of the origin (the new t >= 0). Replace the code
 // by a bounding volume hierarchy acceleration structure as described in the assignment. You can change any
@@ -39,13 +46,19 @@ bool BoundingVolumeHierarchy::intersect(Ray& ray, HitInfo& hitInfo) const
     bool hit = false;
     // Intersect with all triangles of all meshes.
     for (const auto& mesh : m_pScene->meshes) {
+            float t = ray.t;
         for (const auto& tri : mesh.triangles) {
             const auto v0 = mesh.vertices[tri[0]];
             const auto v1 = mesh.vertices[tri[1]];
             const auto v2 = mesh.vertices[tri[2]];
             if (intersectRayWithTriangle(v0.position, v1.position, v2.position, ray, hitInfo)) {
-                hitInfo.material = mesh.material;
-                hit = true;
+                if (ray.t < t) {
+                    hitInfo.material = mesh.material;
+                    hit = true;
+                    hitInfo.v0 = v0;
+                    hitInfo.v1 = v1;
+                    hitInfo.v2 = v2;
+                }
             }
         }
     }
