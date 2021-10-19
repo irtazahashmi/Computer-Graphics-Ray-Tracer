@@ -10,14 +10,18 @@
 
 std::vector<Node> binary_tree;
 
-void splitBox(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>>& triangles, Node& root, char axisSplit, std::vector<int>& left, std::vector<int>& right) {
+void splitBox(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>>& triangles, int index_parent_node, char axisSplit, std::vector<int>& left, std::vector<int>& right) {
     
     // only use the triangles in the parent
     std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3, int>> parentTriangles;
-
+    //std::cout << std::endl;
     // add the indices
-    for (int i = 0; i < root.indices.size(); i++) {
-        std::tuple<glm::vec3, glm::vec3, glm::vec3, int> temp = { get<0>(triangles[i]), get<1>(triangles[i]), get<2>(triangles[i]), i };
+    for (int i = 0; i < binary_tree[index_parent_node].indices.size(); i++) {
+        //std::cout << i << std::endl;
+        std::tuple<glm::vec3, glm::vec3, glm::vec3, int> temp = 
+            { get<0>(triangles[binary_tree[index_parent_node].indices[i]]), 
+            get<1>(triangles[binary_tree[index_parent_node].indices[i]]), 
+            get<2>(triangles[binary_tree[index_parent_node].indices[i]]), i };
         parentTriangles.push_back(temp);
     }
 
@@ -31,6 +35,14 @@ void splitBox(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>>& triangle
     if (axisSplit == 'z') {
         std::sort(parentTriangles.begin(), parentTriangles.end(), BvhComparatorZ());
     }
+   /* std::cout << axisSplit << std::endl;
+
+    for (int i = 0; i < parentTriangles.size(); i++) {
+        std::cout << get<0>(parentTriangles[i]).x << " " << get<0>(parentTriangles[i]).y << " " << get<0>(parentTriangles[i]).z << std::endl;
+        std::cout << get<1>(parentTriangles[i]).x << " " << get<1>(parentTriangles[i]).y << " " << get<1>(parentTriangles[i]).z << std::endl;
+        std::cout << get<2>(parentTriangles[i]).x << " " << get<2>(parentTriangles[i]).y << " " << get<2>(parentTriangles[i]).z << std::endl;
+        std::cout << std::endl;
+    }*/
 
     // split indices to left and right
     for (int i = 0; i < parentTriangles.size(); i++) {
@@ -40,26 +52,40 @@ void splitBox(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>>& triangle
         else {
             right.push_back(get<3>(parentTriangles[i]));
         }
-    }
-
+    }/*
+    std::sort(left.begin(), left.end());
+    std::sort(right.begin(), right.end());
+    for (int i = 0; i < parentTriangles.size() / 2; i++) {
+        std::cout << left[i] << " " << right[i] << std::endl;
+    }*/
 }
 
-void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> triangles, Node& root, int level, int max_level) {
+void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> triangles, int index_parent_node, int level, int max_level) {
 
     //Assume the old root has stored all the indices of each vertex of each triangle
     //Also the root node doesnt have the abb values calculated
-
+    //std::cout << index_parent_node << std::endl;
     //First we want to calculate the AABB values (min x,y,z) and the (max x,y,z)
+    //std::cout << std::endl;
+    //for (int i : binary_tree[index_parent_node].indices) {
+        //if (level ==2 )
+        //std::cout << i << std::endl;
+    //}
+    //std::cout << index_parent_node << std::endl;
 
     glm::vec3 lower{ std::numeric_limits<float>::max() };
     glm::vec3 upper{ -std::numeric_limits<float>::max() };
-
-    for (int index : root.indices) {
+    float tempsum = 0.f;
+    for (int index : binary_tree[index_parent_node].indices) {
 
             // find the min and max value (go through each vertex of the triangle)
             glm::vec3 v0 = get<0>(triangles[index]);
             glm::vec3 v1 = get<1>(triangles[index]);
             glm::vec3 v2 = get<2>(triangles[index]);
+            //std::cout << "LEVEL " << level << std::endl;
+            if (level == 3) {
+                tempsum+=v0.x+v1.x+v2.x;
+            }
             if (lower.x > v0.x) {
                 lower.x = v0.x;
             }
@@ -117,17 +143,23 @@ void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> t
                 upper.z = v2.z;
             }
     }
-    root.data = AxisAlignedBox{ lower,upper };
-    binary_tree.push_back(root);
+    //std::cout << "LOWER - " << lower.x << " " << lower.y << " " << lower.z << std::endl;
+    //std::cout << "UPPER - " << upper.x << " " << upper.y << " " << upper.z << std::endl;
+    if (level == 3) {
+        std::cout << tempsum << std::endl;
+        std::cout << lower.x << " " << lower.y << " " << lower.z << std::endl;
+        std::cout << upper.x << " " << upper.y << " " << upper.z << std::endl;
+    }
+    binary_tree[index_parent_node].data = AxisAlignedBox{ lower,upper };
     // if not at max level, you should continue
-    if (level != max_level) {
+    if (level < max_level && binary_tree[index_parent_node].indices.size()>1) {
         Node left;
         left.isLeaf = true;
         Node right;
         right.isLeaf = true;
         std::vector<int> leftVector;
         std::vector<int> rightVector;
-        char splitAxis;
+        char splitAxis=' ';
         if (level % 3 == 0) {
             splitAxis = 'x';
         }
@@ -137,10 +169,27 @@ void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> t
         if (level % 3 == 2) {
             splitAxis = 'z';
         }
-        splitBox(triangles, root, splitAxis, leftVector, rightVector);
-        root.isLeaf = false;
-        recursiveStepBvh(triangles, left, level + 1, max_level);
-        recursiveStepBvh(triangles, right, level + 1, max_level);
+        //std::cout << "split " << index_parent_node << " split axis " << splitAxis << std::endl;
+        splitBox(triangles, index_parent_node, splitAxis, leftVector, rightVector);
+        left.indices = leftVector;
+        right.indices = rightVector;
+        binary_tree[index_parent_node].isLeaf = false;
+
+        binary_tree.push_back(left);
+        binary_tree.push_back(right);
+
+        int size = binary_tree.size();
+        int left_pos = size - 2;
+        int right_pos = size - 1;
+
+        //if (left.indices == binary_tree[size - 1].indices) {
+            //std::cout << "ok I guess" << std::endl;
+        //}
+
+        //std::cout << index_parent_node << " split axis " << splitAxis << " level " << level << " left - " << size - 2 << " "
+            //<< binary_tree[size-2].indices.size() << " right - " << size - 1 << " " << binary_tree[size-1].indices.size() << std::endl;
+        recursiveStepBvh(triangles, left_pos, level + 1, max_level);
+        recursiveStepBvh(triangles, right_pos, level + 1, max_level);
         //root.indices.clear();
 
         //root.indices.push_back(binary_tree.size());
@@ -153,6 +202,7 @@ void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> t
 BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
     : m_pScene(pScene)
 {
+    std::cout << std::endl << "NEW SCENE - NEW SCENE" << std::endl;
     binary_tree.clear();
     //Create a vector that contains all the triangles
     std::vector<std::tuple<glm::vec3, glm::vec3 , glm::vec3>> triangles;
@@ -166,7 +216,6 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
             triangles.push_back(temp_tri);
         }
     }
-    
     // Create the first root node
     Node root;
     //We assume at the beginning that is a leaf
@@ -179,10 +228,15 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
         root_indices.push_back(i);
     }
     root.indices = root_indices;
+    int i = 0;
+    binary_tree.push_back(root);
+    recursiveStepBvh(triangles, i, 0, 1);
 
-    //binary_tree.push_back(root);
-    recursiveStepBvh(triangles, root, 0, 2);
-
+    /*for (int i = 0; i < binary_tree.size(); i++) {
+        std::cout << i << " -- " << binary_tree[i].indices.size() << " " << binary_tree[i].isLeaf << " Lx " << binary_tree[i].data.lower.x 
+            << " Ly " << binary_tree[i].data.lower.y << " Lz " << binary_tree[i].data.lower.z << std::endl;
+        std::cout << " Ux " << binary_tree[i].data.upper.x << " Uy " << binary_tree[i].data.upper.y << " Uz " << binary_tree[i].data.upper.z << std::endl;
+    }*/
 }
 
 // Return the depth of the tree that you constructed. This is used to tell the
@@ -202,15 +256,22 @@ void BoundingVolumeHierarchy::debugDraw(int level)
     //drawShape(aabb, DrawMode::Filled, glm::vec3(0.0f, 1.0f, 0.0f), 0.2f);
 
     // Draw the AABB as a (white) wireframe box.
-    std::cout << binary_tree.size() << std::endl;
+    //std::cout << binary_tree.size() << std::endl;
+    int cnt = 0; int lcnt = 0;
     for (Node node : binary_tree) {
         AxisAlignedBox aabb{ node.data };
         //drawAABB(aabb, DrawMode::Wireframe);
         if (node.isLeaf) {
             drawAABB(aabb, DrawMode::Filled, glm::vec3(0.05f, 1.0f, 0.05f), 0.1f);
-
+            std::cout << lcnt << "---------------" << std::endl;
+            std::cout << aabb.upper.x << " " << aabb.upper.y << " " << aabb.upper.z << std::endl;
+            std::cout << aabb.lower.x << " " << aabb.lower.y << " " << aabb.lower.z << std::endl << std::endl;
+            lcnt++;
         }
+        //cnt++;
+        //}
     }
+    //std::cout << cnt << std::endl;
 }
 
 
