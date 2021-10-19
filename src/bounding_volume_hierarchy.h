@@ -7,6 +7,7 @@
 struct Node {
     AxisAlignedBox data;
     bool isLeaf;
+    int level;
     std::vector <int> indices;
 };
 

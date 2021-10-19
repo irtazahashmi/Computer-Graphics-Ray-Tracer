@@ -155,8 +155,10 @@ void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> t
     if (level < max_level && binary_tree[index_parent_node].indices.size()>1) {
         Node left;
         left.isLeaf = true;
+        left.level = level+1;
         Node right;
         right.isLeaf = true;
+        right.level = level+1;
         std::vector<int> leftVector;
         std::vector<int> rightVector;
         char splitAxis=' ';
@@ -229,8 +231,9 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
     }
     root.indices = root_indices;
     int i = 0;
+    root.level = 0;
     binary_tree.push_back(root);
-    recursiveStepBvh(triangles, i, 0, 2);
+    recursiveStepBvh(triangles, i, 0, 10);
 
     /*for (int i = 0; i < binary_tree.size(); i++) {
         std::cout << i << " -- " << binary_tree[i].indices.size() << " " << binary_tree[i].isLeaf << " Lx " << binary_tree[i].data.lower.x 
@@ -243,7 +246,7 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
 // slider in the UI how many steps it should display.
 int BoundingVolumeHierarchy::numLevels() const
 {
-    return 1;
+    return 10;
 }
 
 // Use this function to visualize your BVH. This can be useful for debugging. Use the functions in
@@ -257,11 +260,11 @@ void BoundingVolumeHierarchy::debugDraw(int level)
 
     // Draw the AABB as a (white) wireframe box.
     //std::cout << binary_tree.size() << std::endl;
-    int cnt = 0; int lcnt = 0;
+    //int cnt = 0; int lcnt = 0;
     for (Node node : binary_tree) {
         AxisAlignedBox aabb{ node.data };
         //drawAABB(aabb, DrawMode::Wireframe);
-        if (node.isLeaf) {
+        if (node.level == level) {
             drawAABB(aabb, DrawMode::Filled, glm::vec3(0.05f, 1.0f, 0.05f), 0.1f);
             //std::cout << lcnt << "---------------" << std::endl;
             //std::cout << aabb.upper.x << " " << aabb.upper.y << " " << aabb.upper.z << std::endl;
