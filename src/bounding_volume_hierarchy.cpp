@@ -35,16 +35,6 @@ void BoundingVolumeHierarchy::debugDraw(int level)
     drawAABB(aabb, DrawMode::Filled, glm::vec3(0.05f, 1.0f, 0.05f), 0.1f);
 }
 
-std::tuple<float, float, float> getBarycentricWeights(HitInfo& hitInfo, glm::vec3& p) {
-    float A = glm::length(glm::cross(hitInfo.v1.position - p, hitInfo.v2.position - p)) / 2;
-    float B = glm::length(glm::cross(hitInfo.v0.position - p, hitInfo.v2.position - p)) / 2;
-    float C = glm::length(glm::cross(hitInfo.v0.position - p, hitInfo.v1.position - p)) / 2;
-    float totalArea = glm::length(glm::cross(hitInfo.v2.position - hitInfo.v0.position, hitInfo.v1.position - hitInfo.v0.position)) / 2;
-    float alpha = A / totalArea;
-    float beta = B / totalArea;
-    float gamma = C / totalArea;
-    return  { alpha, beta, gamma };
-}
 
 
 // Return true if something is hit, returns false otherwise. Only find hits if they are closer than t stored
@@ -71,19 +61,6 @@ bool BoundingVolumeHierarchy::intersect(Ray& ray, HitInfo& hitInfo) const
                 }
             }
         }
-
-        drawRay({ hitInfo.v0.position, hitInfo.v0.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
-        drawRay({ hitInfo.v1.position, hitInfo.v1.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
-        drawRay({ hitInfo.v2.position, hitInfo.v2.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
-
-        glm::vec3 p = ray.origin + ray.t * ray.direction;
-
-        auto [ alpha, beta, gamma ] = getBarycentricWeights(hitInfo, p);
-
-        hitInfo.normal = alpha * hitInfo.v0.normal + beta * hitInfo.v1.normal + gamma * hitInfo.v2.normal;
-
-        drawRay({ p, hitInfo.normal, ray.t }, glm::vec3(0.0f, 0.0f, 1.0f));
-
     }
     // Intersect with spheres.
     for (const auto& sphere : m_pScene->spheres)

@@ -131,10 +131,38 @@ static bool hitLight(const BoundingVolumeHierarchy& bvh, Ray ray, glm::vec3 ligh
 }
 */
 
+
+static std::tuple<float, float, float> getBarycentricWeights(HitInfo& hitInfo, glm::vec3& p) {
+    float A = glm::length(glm::cross(hitInfo.v1.position - p, hitInfo.v2.position - p)) / 2;
+    float B = glm::length(glm::cross(hitInfo.v0.position - p, hitInfo.v2.position - p)) / 2;
+    float C = glm::length(glm::cross(hitInfo.v0.position - p, hitInfo.v1.position - p)) / 2;
+    float totalArea = glm::length(glm::cross(hitInfo.v2.position - hitInfo.v0.position, hitInfo.v1.position - hitInfo.v0.position)) / 2;
+    float alpha = A / totalArea;
+    float beta = B / totalArea;
+    float gamma = C / totalArea;
+    return  { alpha, beta, gamma };
+}
+
+static void drawInterpolatedNormal(HitInfo& hitInfo, Ray& ray) {
+    drawRay({ hitInfo.v0.position, hitInfo.v0.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
+    drawRay({ hitInfo.v1.position, hitInfo.v1.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
+    drawRay({ hitInfo.v2.position, hitInfo.v2.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
+
+    glm::vec3 p = ray.origin + ray.t * ray.direction;
+
+    if (hitInfo.v0.normal != glm::vec3{ 0 }) {
+        auto [alpha, beta, gamma] = getBarycentricWeights(hitInfo, p);
+        hitInfo.normal = alpha * hitInfo.v0.normal + beta * hitInfo.v1.normal + gamma * hitInfo.v2.normal;
+        drawRay({ p, hitInfo.normal, ray.t }, glm::vec3(0.0f, 0.0f, 1.0f));
+    }
+}
+
+
 static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray, int level, glm::vec3 finalColor, int maxLevel) {
     HitInfo hitInfo;
     if (bvh.intersect(ray, hitInfo)) {
-
+        
+        drawInterpolatedNormal(hitInfo, ray);
         // for all the lights in the scene
         for (const auto& light : scene.lights) {
 
