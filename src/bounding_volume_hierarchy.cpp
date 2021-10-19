@@ -145,11 +145,11 @@ void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> t
     }
     //std::cout << "LOWER - " << lower.x << " " << lower.y << " " << lower.z << std::endl;
     //std::cout << "UPPER - " << upper.x << " " << upper.y << " " << upper.z << std::endl;
-    if (level == 3) {
-        std::cout << tempsum << std::endl;
-        std::cout << lower.x << " " << lower.y << " " << lower.z << std::endl;
-        std::cout << upper.x << " " << upper.y << " " << upper.z << std::endl;
-    }
+    //if (level == 3) {
+        //std::cout << tempsum << std::endl;
+       // std::cout << lower.x << " " << lower.y << " " << lower.z << std::endl;
+        //std::cout << upper.x << " " << upper.y << " " << upper.z << std::endl;
+    //}
     binary_tree[index_parent_node].data = AxisAlignedBox{ lower,upper };
     // if not at max level, you should continue
     if (level < max_level && binary_tree[index_parent_node].indices.size()>1) {
@@ -261,13 +261,13 @@ void BoundingVolumeHierarchy::debugDraw(int level)
     for (Node node : binary_tree) {
         AxisAlignedBox aabb{ node.data };
         //drawAABB(aabb, DrawMode::Wireframe);
-        if (node.isLeaf) {
-            drawAABB(aabb, DrawMode::Filled, glm::vec3(0.05f, 1.0f, 0.05f), 0.1f);
-            std::cout << lcnt << "---------------" << std::endl;
-            std::cout << aabb.upper.x << " " << aabb.upper.y << " " << aabb.upper.z << std::endl;
-            std::cout << aabb.lower.x << " " << aabb.lower.y << " " << aabb.lower.z << std::endl << std::endl;
-            lcnt++;
-        }
+        //if (node.isLeaf) {
+            //drawAABB(aabb, DrawMode::Filled, glm::vec3(0.05f, 1.0f, 0.05f), 0.1f);
+            //std::cout << lcnt << "---------------" << std::endl;
+            //std::cout << aabb.upper.x << " " << aabb.upper.y << " " << aabb.upper.z << std::endl;
+            //std::cout << aabb.lower.x << " " << aabb.lower.y << " " << aabb.lower.z << std::endl << std::endl;
+            //lcnt++;
+        //}
         //cnt++;
         //}
     }
