@@ -175,14 +175,14 @@ static void drawInterpolatedNormal(HitInfo& hitInfo, Ray& ray) {
 }
 
 
-static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray, int level, glm::vec3 finalColor, int maxLevel) {
+static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray, int level, int maxLevel) {
     HitInfo hitInfo;
     if (bvh.intersect(ray, hitInfo)) {
-        
+        glm::vec3 finalColor{ 0.f };
         drawInterpolatedNormal(hitInfo, ray);
         // for all the lights in the scene
         for (const auto& light : scene.lights) {
-
+            
             // POINT LIGHT
             if (std::holds_alternative<PointLight>(light)) {
                 const PointLight pointlight = std::get<PointLight>(light);
@@ -341,7 +341,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
             glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
             Ray reflectedRay = { intersectionPoint,  reflectedVector };
 
-            finalColor = hitInfo.material.ks * (recursiveRayTracer(scene, bvh, reflectedRay, level + 1, maxLevel));
+            finalColor = hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel));
         }
 
         return finalColor;
@@ -358,7 +358,8 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
 {
     int startLevel = 0;
     int maxLevel = 6;
-    return recursiveRayTracer(scene, bvh, ray, startLevel, maxLevel);
+    return recursive_ray_tracer(scene, bvh, ray, startLevel, maxLevel);
+    //return glm::vec3 { 0.f };
 
     // Lights are stored in a single array (scene.lights) where each item can be either a PointLight, SegmentLight or ParallelogramLight.
     // You can check whether a light at index i is a PointLight using std::holds_alternative:
