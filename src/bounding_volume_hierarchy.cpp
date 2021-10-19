@@ -246,7 +246,7 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
 // slider in the UI how many steps it should display.
 int BoundingVolumeHierarchy::numLevels() const
 {
-    return 10;
+    return 11;
 }
 
 // Use this function to visualize your BVH. This can be useful for debugging. Use the functions in
