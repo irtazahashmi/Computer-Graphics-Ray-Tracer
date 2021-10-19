@@ -4,6 +4,12 @@
 #include <array>
 #include <span>
 
+struct Node {
+    AxisAlignedBox data;
+    bool isLeaf;
+    std::vector <int> indices;
+};
+
 class BoundingVolumeHierarchy {
 public:
     BoundingVolumeHierarchy(Scene* pScene);
