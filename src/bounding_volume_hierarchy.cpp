@@ -171,6 +171,12 @@ void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> t
         int left_pos = size - 2;
         int right_pos = size - 1;
 
+        //Updating the parent node to save its children' indeces in the binary tree
+        binary_tree[index_parent_node].indices.clear();
+        binary_tree[index_parent_node].indices.push_back(left_pos);
+        binary_tree[index_parent_node].indices.push_back(right_pos);
+
+
         //Call twice the recursive functions one for the left and once for the right node
         recursiveStepBvh(triangles, left_pos, level + 1, max_level);
         recursiveStepBvh(triangles, right_pos, level + 1, max_level);
