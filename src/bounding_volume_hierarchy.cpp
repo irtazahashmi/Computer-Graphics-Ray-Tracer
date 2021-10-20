@@ -201,7 +201,7 @@ void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> t
 BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
     : m_pScene(pScene)
 {
-    std::cout << std::endl << "NEW SCENE - NEW SCENE" << std::endl;
+    //std::cout << std::endl << "NEW SCENE - NEW SCENE" << std::endl;
     binary_tree.clear();
     //Create a vector that contains all the triangles
     std::vector<std::tuple<glm::vec3, glm::vec3 , glm::vec3>> triangles;
@@ -262,7 +262,7 @@ void BoundingVolumeHierarchy::debugDraw(int level)
         AxisAlignedBox aabb{ node.data };
         //drawAABB(aabb, DrawMode::Wireframe);
         if (node.level == level) {
-            drawAABB(aabb, DrawMode::Filled, glm::vec3(0.05f, 1.0f, 0.05f), 0.1f);
+            drawAABB(aabb, DrawMode::Wireframe, glm::vec3(1.0f));
             //std::cout << lcnt << "---------------" << std::endl;
             //std::cout << aabb.upper.x << " " << aabb.upper.y << " " << aabb.upper.z << std::endl;
             //std::cout << aabb.lower.x << " " << aabb.lower.y << " " << aabb.lower.z << std::endl << std::endl;
