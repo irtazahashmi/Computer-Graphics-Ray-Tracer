@@ -79,69 +79,66 @@ void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> t
     for (int index : binary_tree[index_parent_node].indices) {
 
             // find the min and max value (go through each vertex of the triangle)
-            glm::vec3 v0 = get<0>(triangles[index]);
-            glm::vec3 v1 = get<1>(triangles[index]);
-            glm::vec3 v2 = get<2>(triangles[index]);
-            //std::cout << "LEVEL " << level << std::endl;
-            if (level == 3) {
-                tempsum+=v0.x+v1.x+v2.x;
-            }
-            if (lower.x > v0.x) {
-                lower.x = v0.x;
-            }
-            if (lower.y > v0.y) {
-                lower.y = v0.y;
-            }
-            if (lower.z > v0.z) {
-                lower.z = v0.z;
-            }
-            if (upper.x < v0.x) {
-                upper.x = v0.x;
-            }
-            if (upper.y < v0.y) {
-                upper.y = v0.y;
-            }
-            if (upper.z < v0.z) {
-                upper.z = v0.z;
-            }
-            //
-            if (lower.x > v1.x) {
-                lower.x = v1.x;
-            }
-            if (lower.y > v1.y) {
-                lower.y = v1.y;
-            }
-            if (lower.z > v1.z) {
-                lower.z = v1.z;
-            }
-            if (upper.x < v1.x) {
-                upper.x = v1.x;
-            }
-            if (upper.y < v1.y) {
-                upper.y = v1.y;
-            }
-            if (upper.z < v1.z) {
-                upper.z = v1.z;
-            }
-            //
-            if (lower.x > v2.x) {
-                lower.x = v2.x;
-            }
-            if (lower.y > v2.y) {
-                lower.y = v2.y;
-            }
-            if (lower.z > v2.z) {
-                lower.z = v2.z;
-            }
-            if (upper.x < v2.x) {
-                upper.x = v2.x;
-            }
-            if (upper.y < v2.y) {
-                upper.y = v2.y;
-            }
-            if (upper.z < v2.z) {
-                upper.z = v2.z;
-            }
+        glm::vec3 v0 = get<0>(triangles[index]);
+        glm::vec3 v1 = get<1>(triangles[index]);
+        glm::vec3 v2 = get<2>(triangles[index]);
+        //std::cout << "LEVEL " << level << std::endl;
+        if (lower.x > v0.x) {
+            lower.x = v0.x;
+        }
+        if (lower.y > v0.y) {
+            lower.y = v0.y;
+        }
+        if (lower.z > v0.z) {
+            lower.z = v0.z;
+        }
+        if (upper.x < v0.x) {
+            upper.x = v0.x;
+        }
+        if (upper.y < v0.y) {
+            upper.y = v0.y;
+        }
+        if (upper.z < v0.z) {
+            upper.z = v0.z;
+        }
+        //
+        if (lower.x > v1.x) {
+            lower.x = v1.x;
+        }
+        if (lower.y > v1.y) {
+            lower.y = v1.y;
+        }
+        if (lower.z > v1.z) {
+            lower.z = v1.z;
+        }
+        if (upper.x < v1.x) {
+            upper.x = v1.x;
+        }
+        if (upper.y < v1.y) {
+            upper.y = v1.y;
+        }
+        if (upper.z < v1.z) {
+            upper.z = v1.z;
+        }
+        //
+        if (lower.x > v2.x) {
+            lower.x = v2.x;
+        }
+        if (lower.y > v2.y) {
+            lower.y = v2.y;
+        }
+        if (lower.z > v2.z) {
+            lower.z = v2.z;
+        }
+        if (upper.x < v2.x) {
+            upper.x = v2.x;
+        }
+        if (upper.y < v2.y) {
+            upper.y = v2.y;
+        }
+        if (upper.z < v2.z) {
+            upper.z = v2.z;
+        }
     }
     //std::cout << "LOWER - " << lower.x << " " << lower.y << " " << lower.z << std::endl;
     //std::cout << "UPPER - " << upper.x << " " << upper.y << " " << upper.z << std::endl;
