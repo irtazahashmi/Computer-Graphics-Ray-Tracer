@@ -160,6 +160,11 @@ static std::tuple<float, float, float> getBarycentricWeights(HitInfo& hitInfo, g
     return  { alpha, beta, gamma };
 }
 
+static glm::vec3 getInterpolatedNormal(HitInfo& hitInfo, glm::vec3& p) {
+    auto [alpha, beta, gamma] = getBarycentricWeights(hitInfo, p);
+    return alpha * hitInfo.v0.normal + beta * hitInfo.v1.normal + gamma * hitInfo.v2.normal;
+}
+
 static void drawInterpolatedNormal(HitInfo& hitInfo, Ray& ray) {
     drawRay({ hitInfo.v0.position, hitInfo.v0.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
     drawRay({ hitInfo.v1.position, hitInfo.v1.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
@@ -168,8 +173,7 @@ static void drawInterpolatedNormal(HitInfo& hitInfo, Ray& ray) {
     glm::vec3 p = ray.origin + ray.t * ray.direction;
 
     if (hitInfo.v0.normal != glm::vec3{ 0 }) {
-        auto [alpha, beta, gamma] = getBarycentricWeights(hitInfo, p);
-        hitInfo.normal = alpha * hitInfo.v0.normal + beta * hitInfo.v1.normal + gamma * hitInfo.v2.normal;
+        hitInfo.normal = getInterpolatedNormal(hitInfo, p);
         drawRay({ p, hitInfo.normal, ray.t }, glm::vec3(0.0f, 0.0f, 1.0f));
     }
 }
