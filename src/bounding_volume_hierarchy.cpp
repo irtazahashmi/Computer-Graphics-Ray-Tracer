@@ -11,7 +11,7 @@
 //Declare the binary tree as a global variable, where we are going to store all the information about the bvh for each node
 std::vector<Node> binary_tree;
 
-std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3, Mesh>> triangles;
+std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3, Material, Vertex, Vertex, Vertex>> triangles;
 
 /// <summary>
 /// This function splits the triangles from the parent node, into two vectors 
@@ -202,7 +202,7 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
             const auto v0 = mesh.vertices[tri[0]];
             const auto v1 = mesh.vertices[tri[1]];
             const auto v2 = mesh.vertices[tri[2]];
-            std::tuple temp_tri = { v0.position,v1.position,v2.position, mesh };
+            std::tuple temp_tri = { v0.position,v1.position,v2.position, mesh.material, v0, v1, v2 };
             triangles.push_back(temp_tri);
         }
     }
@@ -264,21 +264,21 @@ bool intersectAABB(Ray& ray, HitInfo& hitInfo, Node& parent) {
         }
         // if we have reached a leaf, check the triangles
         if (parent.isLeaf) {
+            float t = ray.t;
             for (int index : parent.indices) {
-                float t = ray.t;
-                const auto v0 = get<0>(triangles[index]);
-                const auto v1 = get<1>(triangles[index]);
-                const auto v2 = get<2>(triangles[index]);
-                if (intersectRayWithTriangle(v0, v1, v2, ray, hitInfo)) {
-                    if (t < ray.t) {
-                        ray.t = t;
+                
+                const auto v0 = get<4>(triangles[index]);
+                const auto v1 = get<5>(triangles[index]);
+                const auto v2 = get<6>(triangles[index]);
+                if (intersectRayWithTriangle(v0.position, v1.position, v2.position, ray, hitInfo)) {
+                    if (ray.t < t) {
 
-                        hitInfo.material = get<3>(triangles[index]).material;
+                        hitInfo.material = get<3>(triangles[index]);
                         hit = true;
 
-                        hitInfo.v0.position = v0;
-                        hitInfo.v1.position = v1;
-                        hitInfo.v2.position = v2;
+                        hitInfo.v0 = v0;
+                        hitInfo.v1 = v1;
+                        hitInfo.v2 = v2;
                     }
                 }
             }
