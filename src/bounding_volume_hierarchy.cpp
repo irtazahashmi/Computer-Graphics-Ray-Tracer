@@ -11,6 +11,8 @@
 //Declare the binary tree as a global variable, where we are going to store all the information about the bvh for each node
 std::vector<Node> binary_tree;
 
+std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3, Mesh>> triangles;
+
 /// <summary>
 /// This function splits the triangles from the parent node, into two vectors 
 /// which two vectors are used to create the axis-aligned-boxes for the cildren
@@ -22,7 +24,7 @@ std::vector<Node> binary_tree;
 /// <param name="axisSplit"> A single char , either 'x' , 'y' or 'z' which indicates around which axis we need to split the triangles</param>
 /// <param name="left"> A vector which will contain the indices of all the triangles that are at the left child of the parent node</param>
 /// <param name="right"> A vector which will contain the indices of all the triangles that are at the right child of the parent node</param>
-void splitBox(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>>& triangles, int index_parent_node, char axisSplit, std::vector<int>& left, std::vector<int>& right) {
+void splitBox(int index_parent_node, char axisSplit, std::vector<int>& left, std::vector<int>& right) {
 
     // Create new structure where we are going to store not only the position vectors of each vertex
     // but also the index of each triangle at the vector which contains all the triangles.
@@ -73,7 +75,7 @@ void splitBox(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>>& triangle
 /// <param name="index_parent_node"> The index of the (current) parent node in the binary_tree structure</param>
 /// <param name="level"> The current level (or depth) of the node in the binary tree</param>
 /// <param name="max_level"> The maximum level we want our tree to have</param>
-void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> triangles, int index_parent_node, int level, int max_level) {
+void recursiveStepBvh(int index_parent_node, int level, int max_level) {
 
     //First we need to calulate the upper and lower point of the current node's axis aligned box
     //Declare two vectors pointing to inf and -inf for the lower and upper vector accordingly
@@ -153,7 +155,7 @@ void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> t
         }
 
         //Calling the splitBox function, split the triangles indices into two vectors according their position and the split axis
-        splitBox(triangles, index_parent_node, splitAxis, leftVector, rightVector);
+        splitBox(index_parent_node, splitAxis, leftVector, rightVector);
 
         //We pass the two vectors we calculated at the splitBox function at the corresponding nodes
         left.indices = leftVector;
@@ -177,8 +179,8 @@ void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> t
         binary_tree[index_parent_node].indices.push_back(right_pos);
 
         //Call twice the recursive functions one for the left and once for the right node
-        recursiveStepBvh(triangles, left_pos, level + 1, max_level);
-        recursiveStepBvh(triangles, right_pos, level + 1, max_level);
+        recursiveStepBvh(left_pos, level + 1, max_level);
+        recursiveStepBvh(right_pos, level + 1, max_level);
     }
 }
 
@@ -192,8 +194,7 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
     //Whenever we load new scene we need to clear the previous binary tree
     binary_tree.clear();
 
-    //Create a vector that we will use to store all the triangles
-    std::vector<std::tuple<glm::vec3, glm::vec3 , glm::vec3>> triangles;
+    triangles.clear();
 
     //Use the method given in intersection to iterate through and add all of the triangles to our vector
     for (const auto& mesh : m_pScene->meshes) {
@@ -201,7 +202,7 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
             const auto v0 = mesh.vertices[tri[0]];
             const auto v1 = mesh.vertices[tri[1]];
             const auto v2 = mesh.vertices[tri[2]];
-            std::tuple temp_tri = { v0.position,v1.position,v2.position };
+            std::tuple temp_tri = { v0.position,v1.position,v2.position, mesh };
             triangles.push_back(temp_tri);
         }
     }
@@ -231,7 +232,7 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
     binary_tree.push_back(root);
 
     //Call the recursive function
-    recursiveStepBvh(triangles, i, 0, 10);
+    recursiveStepBvh(i, 0, 10);
 }
 
 // Return the depth of the tree that you constructed. This is used to tell the
@@ -254,7 +255,42 @@ void BoundingVolumeHierarchy::debugDraw(int level)
     }
 }
 
+bool intersectAABB(Ray& ray, HitInfo& hitInfo, Node& parent) {
+    bool hit = false;
+    // if the ray intersects with the parent node
+    if (intersectRayWithShape(parent.data, ray)) {
+        if (debugIntersectionAABB) {
+            drawAABB(parent.data, DrawMode::Wireframe, glm::vec3(1.0f));
+        }
+        // if we have reached a leaf, check the triangles
+        if (parent.isLeaf) {
+            for (int index : parent.indices) {
+                float t = ray.t;
+                const auto v0 = get<0>(triangles[index]);
+                const auto v1 = get<1>(triangles[index]);
+                const auto v2 = get<2>(triangles[index]);
+                if (intersectRayWithTriangle(v0, v1, v2, ray, hitInfo)) {
+                    if (t < ray.t) {
+                        ray.t = t;
 
+                        hitInfo.material = get<3>(triangles[index]).material;
+                        hit = true;
+
+                        hitInfo.v0.position = v0;
+                        hitInfo.v1.position = v1;
+                        hitInfo.v2.position = v2;
+                    }
+                }
+            }
+        }
+        // else recursive function of the children
+        else {
+            return intersectAABB(ray, hitInfo, binary_tree[parent.indices[0]]) || intersectAABB(ray, hitInfo, binary_tree[parent.indices[1]]);
+        }
+        return hit;
+    }
+    return hit;
+}
 
 // Return true if something is hit, returns false otherwise. Only find hits if they are closer than t stored
 // in the ray and if the intersection is on the correct side of the origin (the new t >= 0). Replace the code
@@ -262,25 +298,8 @@ void BoundingVolumeHierarchy::debugDraw(int level)
 // file you like, including bounding_volume_hierarchy.h .
 bool BoundingVolumeHierarchy::intersect(Ray& ray, HitInfo& hitInfo) const
 {
-    bool hit = false;
-    // Intersect with all triangles of all meshes.
-    for (const auto& mesh : m_pScene->meshes) {
-            float t = ray.t;
-        for (const auto& tri : mesh.triangles) {
-            const auto v0 = mesh.vertices[tri[0]];
-            const auto v1 = mesh.vertices[tri[1]];
-            const auto v2 = mesh.vertices[tri[2]];
-            if (intersectRayWithTriangle(v0.position, v1.position, v2.position, ray, hitInfo)) {
-                if (ray.t < t) {
-                    hitInfo.material = mesh.material;
-                    hit = true;
-                    hitInfo.v0 = v0;
-                    hitInfo.v1 = v1;
-                    hitInfo.v2 = v2;
-                }
-            }
-        }
-    }
+    bool hit = intersectAABB(ray, hitInfo, binary_tree[0]);
+     
     // Intersect with spheres.
     for (const auto& sphere : m_pScene->spheres)
         hit |= intersectRayWithShape(sphere, ray, hitInfo);

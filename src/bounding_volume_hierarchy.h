@@ -4,6 +4,8 @@
 #include <array>
 #include <span>
 
+extern bool debugIntersectionAABB;
+
 struct Node {
     AxisAlignedBox data;
     bool isLeaf;

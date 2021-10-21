@@ -38,6 +38,10 @@ const std::filesystem::path dataPath { DATA_DIR };
 // if checked box in gui, will display debug rays for interpolated normals
 bool debugNormalInterpolation{ false };
 
+bool debugIntersectionAABB{ false };
+
+bool debugShadowRay{ false };
+
 enum class ViewMode {
     Rasterization = 0,
     RayTracing = 1
@@ -200,15 +204,17 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                     finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
                 }
                 else {
-                    // debug shadow ray: shadow ray occluded - hits something other than light -> red ray
-                    glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+                    if (debugShadowRay) {
+                        // debug shadow ray: shadow ray occluded - hits something other than light -> red ray
+                        glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
 
-                    Ray shadowRay;
-                    shadowRay.origin = intersectionPointRay;
-                    shadowRay.direction = -(intersectionPointRay - pointlight.position);
-                    HitInfo shadowRayInfo;
-                    bvh.intersect(shadowRay, shadowRayInfo);
-                    drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+                        Ray shadowRay;
+                        shadowRay.origin = intersectionPointRay;
+                        shadowRay.direction = -(intersectionPointRay - pointlight.position);
+                        HitInfo shadowRayInfo;
+                        bvh.intersect(shadowRay, shadowRayInfo);
+                        drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+                    }
                 }
    
             }
@@ -525,6 +531,8 @@ int main(int argc, char** argv)
         if (viewMode == ViewMode::Rasterization) {
             ImGui::Checkbox("Draw BVH", &debugBVH);
             ImGui::Checkbox("Draw Interpolated Normals", &debugNormalInterpolation);
+            ImGui::Checkbox("Draw intersected but not visited nodes", &debugIntersectionAABB);
+            ImGui::Checkbox("Draw shadow debug ray", &debugShadowRay);
             if (debugBVH)
                 ImGui::SliderInt("BVH Level", &bvhDebugLevel, 0, bvh.numLevels() - 1);
         }

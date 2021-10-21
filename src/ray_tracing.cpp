@@ -345,13 +345,13 @@ bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray)
     // there is an intersection of ray and AABB
     if (tIn < ray.t) {
         // if the intersection is behind the origin of the ray, then update ray.t as tOut
-        if (tIn < 0) {
-            ray.t = tOut;
-        }
-        else {
+        //if (tIn < 0) {
+        //    ray.t = tOut;
+        //}
+        //else {
             // else the intersection is infront. update ray.t as tIn (where the ray hits the box) and return true
-            ray.t = tIn;
-        }
+        //    ray.t = tIn;
+        //}
 
         return true;
     }
