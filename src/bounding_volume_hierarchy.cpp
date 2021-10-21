@@ -11,7 +11,7 @@
 //Declare the binary tree as a global variable, where we are going to store all the information about the bvh for each node
 std::vector<Node> binary_tree;
 
-std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3, Material, Vertex, Vertex, Vertex>> triangles;
+std::vector<std::tuple<Vertex, Vertex, Vertex, Material>> triangles;
 
 /// <summary>
 /// This function splits the triangles from the parent node, into two vectors 
@@ -37,9 +37,9 @@ void splitBox(int index_parent_node, char axisSplit, std::vector<int>& left, std
         //in the vector that we have created at line-30. In the form of ---
         // --- < vertex vector v0, vertex vector v10, vertex vector v2, the triangle position in the main triangle vector>
         std::tuple<glm::vec3, glm::vec3, glm::vec3, int> temp =
-        { get<0>(triangles[binary_tree[index_parent_node].indices[i]]),
-        get<1>(triangles[binary_tree[index_parent_node].indices[i]]),
-        get<2>(triangles[binary_tree[index_parent_node].indices[i]]), binary_tree[index_parent_node].indices[i] };
+        { get<0>(triangles[binary_tree[index_parent_node].indices[i]]).position,
+        get<1>(triangles[binary_tree[index_parent_node].indices[i]]).position,
+        get<2>(triangles[binary_tree[index_parent_node].indices[i]]).position, binary_tree[index_parent_node].indices[i] };
         parentTriangles.push_back(temp);
     }
 
@@ -87,9 +87,9 @@ void recursiveStepBvh(int index_parent_node, int level, int max_level) {
     for (int index : binary_tree[index_parent_node].indices) {
 
         //Get all the vector positions for each triangle vertex
-        glm::vec3 v0 = get<0>(triangles[index]);
-        glm::vec3 v1 = get<1>(triangles[index]);
-        glm::vec3 v2 = get<2>(triangles[index]);
+        glm::vec3 v0 = get<0>(triangles[index]).position;
+        glm::vec3 v1 = get<1>(triangles[index]).position;
+        glm::vec3 v2 = get<2>(triangles[index]).position;
 
         //Minimum check for v0
         lower.x = glm::min(lower.x, v0.x);
@@ -202,7 +202,7 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
             const auto v0 = mesh.vertices[tri[0]];
             const auto v1 = mesh.vertices[tri[1]];
             const auto v2 = mesh.vertices[tri[2]];
-            std::tuple temp_tri = { v0.position,v1.position,v2.position, mesh.material, v0, v1, v2 };
+            std::tuple temp_tri = { v0,v1,v2, mesh.material};
             triangles.push_back(temp_tri);
         }
     }
@@ -254,7 +254,7 @@ void BoundingVolumeHierarchy::debugDraw(int level)
         }
     }
 }
-
+/*
 bool intersectAABB(Ray& ray, HitInfo& hitInfo, Node& parent) {
     bool hit = false;
     // if the ray intersects with the parent node
@@ -267,9 +267,9 @@ bool intersectAABB(Ray& ray, HitInfo& hitInfo, Node& parent) {
             float t = ray.t;
             for (int index : parent.indices) {
                 
-                const auto v0 = get<4>(triangles[index]);
-                const auto v1 = get<5>(triangles[index]);
-                const auto v2 = get<6>(triangles[index]);
+                const auto v0 = get<0>(triangles[index]);
+                const auto v1 = get<1>(triangles[index]);
+                const auto v2 = get<2>(triangles[index]);
                 if (intersectRayWithTriangle(v0.position, v1.position, v2.position, ray, hitInfo)) {
                     if (ray.t < t) {
 
@@ -290,7 +290,7 @@ bool intersectAABB(Ray& ray, HitInfo& hitInfo, Node& parent) {
         return hit;
     }
     return hit;
-}
+} */
 
 // Return true if something is hit, returns false otherwise. Only find hits if they are closer than t stored
 // in the ray and if the intersection is on the correct side of the origin (the new t >= 0). Replace the code
@@ -298,7 +298,60 @@ bool intersectAABB(Ray& ray, HitInfo& hitInfo, Node& parent) {
 // file you like, including bounding_volume_hierarchy.h .
 bool BoundingVolumeHierarchy::intersect(Ray& ray, HitInfo& hitInfo) const
 {
-    bool hit = intersectAABB(ray, hitInfo, binary_tree[0]);
+    bool hit = false;
+    // Intersect with all triangles of all meshes.
+    float t = ray.t;
+    std::vector<int> binary_tree_indeces;
+    binary_tree_indeces.push_back(0);
+    while (binary_tree_indeces.size() > 0) {
+        int current_index = binary_tree_indeces.back();
+        binary_tree_indeces.pop_back();
+        if (intersectRayWithShape(binary_tree[current_index].data, ray)) {
+            if (debugIntersectionAABB) {
+                drawAABB(binary_tree[current_index].data, DrawMode::Wireframe, glm::vec3(1.0f));
+            }
+            if (binary_tree[current_index].isLeaf) {
+                for (int i = 0; i < triangles.size(); i++) {
+                    Vertex v0 = get<0>(triangles[i]);
+                    Vertex v1 = get<1>(triangles[i]);
+                    Vertex v2 = get<2>(triangles[i]);
+                    if (intersectRayWithTriangle(v0.position, v1.position, v2.position, ray, hitInfo)) {
+                        if (ray.t < t) {
+                            hitInfo.material = get<3>(triangles[i]);
+                            hit = true;
+                            hitInfo.v0 = v0;
+                            hitInfo.v1 = v1;
+                            hitInfo.v2 = v2;
+                        }
+                    }
+                }
+                break;
+            }
+            else {
+                binary_tree_indeces.push_back(binary_tree[current_index].indices[0]);
+                binary_tree_indeces.push_back(binary_tree[current_index].indices[1]);
+            }
+        }
+    }
+    /*
+    for (const auto& mesh : m_pScene->meshes) {
+        float t = ray.t;
+        for (const auto& tri : mesh.triangles) {
+            const auto v0 = mesh.vertices[tri[0]];
+            const auto v1 = mesh.vertices[tri[1]];
+            const auto v2 = mesh.vertices[tri[2]];
+            if (intersectRayWithTriangle(v0.position, v1.position, v2.position, ray, hitInfo)) {
+                if (ray.t < t) {
+                    hitInfo.material = mesh.material;
+                    hit = true;
+                    hitInfo.v0 = v0;
+                    hitInfo.v1 = v1;
+                    hitInfo.v2 = v2;
+                }
+            }
+        }
+    }*/
+
      
     // Intersect with spheres.
     for (const auto& sphere : m_pScene->spheres)
