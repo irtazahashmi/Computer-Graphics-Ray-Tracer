@@ -20,11 +20,11 @@ std::vector<Node> binary_tree;
 ///     each glm::vec3 corresponds to one vertex of each triangle</param>
 /// <param name="index_parent_node"> The index of the parent node in the binary_tree structure</param>
 /// <param name="axisSplit"> A single char , either 'x' , 'y' or 'z' which indicates around which axis we need to split the triangles</param>
-/// <param name="left"> A vector which will contains the indices of all the triangles that are at the left child of the parent node</param>
-/// <param name="right"> A vector which will contains the indices of all the triangles that are at the right child of the parent node</param>
+/// <param name="left"> A vector which will contain the indices of all the triangles that are at the left child of the parent node</param>
+/// <param name="right"> A vector which will contain the indices of all the triangles that are at the right child of the parent node</param>
 void splitBox(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>>& triangles, int index_parent_node, char axisSplit, std::vector<int>& left, std::vector<int>& right) {
 
-    // Creat new structure where we are going to store not only the position vectors of each vertex
+    // Create new structure where we are going to store not only the position vectors of each vertex
     // but also the index of each triangle at the vector which contains all the triangles.
     // So after we sort them we can only push the indices back to child vectors (as specified)
     std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3, int>> parentTriangles;
@@ -32,7 +32,7 @@ void splitBox(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>>& triangle
     //We iterate through all the indices that are stored at the parent node vector<int> indices
     for (int i = 0; i < binary_tree[index_parent_node].indices.size(); i++) {
         //For each triangle in the parent axis-aligned-box we store all the information
-        //in the vector that we have created at line-32. In the form of ---
+        //in the vector that we have created at line-30. In the form of ---
         // --- < vertex vector v0, vertex vector v10, vertex vector v2, the triangle position in the main triangle vector>
         std::tuple<glm::vec3, glm::vec3, glm::vec3, int> temp =
         { get<0>(triangles[binary_tree[index_parent_node].indices[i]]),
@@ -166,7 +166,7 @@ void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> t
         binary_tree.push_back(left);
         binary_tree.push_back(right);
 
-        //Few variables that we will need in the next stage
+        //Few variables for easier access that we will need in the next stage
         int size = binary_tree.size();
         int left_pos = size - 2;
         int right_pos = size - 1;
@@ -175,7 +175,6 @@ void recursiveStepBvh(std::vector<std::tuple<glm::vec3, glm::vec3, glm::vec3>> t
         binary_tree[index_parent_node].indices.clear();
         binary_tree[index_parent_node].indices.push_back(left_pos);
         binary_tree[index_parent_node].indices.push_back(right_pos);
-
 
         //Call twice the recursive functions one for the left and once for the right node
         recursiveStepBvh(triangles, left_pos, level + 1, max_level);
@@ -196,7 +195,7 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
     //Create a vector that we will use to store all the triangles
     std::vector<std::tuple<glm::vec3, glm::vec3 , glm::vec3>> triangles;
 
-    //Use the method given in intersection to iterate and add all of the triangles to our vector
+    //Use the method given in intersection to iterate through and add all of the triangles to our vector
     for (const auto& mesh : m_pScene->meshes) {
         for (const auto& tri : mesh.triangles) {
             const auto v0 = mesh.vertices[tri[0]];
@@ -209,6 +208,7 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
 
     // Create the first root node
     Node root;
+
     //We assume at the beginning that is a leaf
     root.isLeaf = true;
 

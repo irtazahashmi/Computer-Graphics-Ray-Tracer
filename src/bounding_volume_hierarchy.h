@@ -11,6 +11,8 @@ struct Node {
     std::vector <int> indices;
 };
 
+// Comparator for the x axis
+// Compare the sum of the x axis of each vertex in each tuple with each other
 struct BvhComparatorX {
     inline bool operator() (const std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple1, std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple2)
     {
@@ -18,6 +20,8 @@ struct BvhComparatorX {
     }
 };
 
+// Comparator for the y axis
+// Compare the sum of the y axis of each vertex in each tuple with each other
 struct BvhComparatorY {
     inline bool operator() (const std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple1, std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple2)
     {
@@ -25,6 +29,8 @@ struct BvhComparatorY {
     }
 };
 
+// Comparator for the z axis
+// Compare the sum of the z axis of each vertex in each tuple with each other
 struct BvhComparatorZ {
     inline bool operator() (const std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple1, std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple2)
     {
