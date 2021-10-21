@@ -35,6 +35,9 @@ DISABLE_WARNINGS_POP()
 constexpr glm::ivec2 windowResolution { 800, 800 }; // window resolution
 const std::filesystem::path dataPath { DATA_DIR };
 
+// if checked box in gui, will display debug rays for interpolated normals
+bool debugNormalInterpolation{ false };
+
 enum class ViewMode {
     Rasterization = 0,
     RayTracing = 1
@@ -160,12 +163,8 @@ static std::tuple<float, float, float> getBarycentricWeights(HitInfo& hitInfo, g
     return  { alpha, beta, gamma };
 }
 
-static glm::vec3 getInterpolatedNormal(HitInfo& hitInfo, glm::vec3& p) {
-    auto [alpha, beta, gamma] = getBarycentricWeights(hitInfo, p);
-    return alpha * hitInfo.v0.normal + beta * hitInfo.v1.normal + gamma * hitInfo.v2.normal;
-}
-
 static void drawInterpolatedNormal(HitInfo& hitInfo, Ray& ray) {
+    std::cout << hitInfo.v0.texCoord.x << std::endl;
     drawRay({ hitInfo.v0.position, hitInfo.v0.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
     drawRay({ hitInfo.v1.position, hitInfo.v1.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
     drawRay({ hitInfo.v2.position, hitInfo.v2.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
@@ -173,20 +172,34 @@ static void drawInterpolatedNormal(HitInfo& hitInfo, Ray& ray) {
     glm::vec3 p = ray.origin + ray.t * ray.direction;
 
     if (hitInfo.v0.normal != glm::vec3{ 0 }) {
-        hitInfo.normal = getInterpolatedNormal(hitInfo, p);
+        auto [alpha, beta, gamma] = getBarycentricWeights(hitInfo, p);
+        hitInfo.normal = alpha * hitInfo.v0.normal + beta * hitInfo.v1.normal + gamma * hitInfo.v2.normal;
         drawRay({ p, hitInfo.normal, ray.t }, glm::vec3(0.0f, 0.0f, 1.0f));
     }
 }
 
 
-static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray, int level, glm::vec3 finalColor, int maxLevel) {
+static void textureCoordinates(HitInfo& hitInfo, Ray& ray) {
+    glm::vec3 p = ray.origin + ray.t * ray.direction;
+    auto [alpha, beta, gamma] = getBarycentricWeights(hitInfo, p);
+    glm::vec2 textureCoordinates = alpha * hitInfo.v0.texCoord + beta * hitInfo.v1.texCoord + gamma * hitInfo.v2.texCoord;
+    // hitInfo.material.kd = someMethodToVec3(textureCoordinates);
+}
+
+
+static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray, int level, int maxLevel) {
     HitInfo hitInfo;
     if (bvh.intersect(ray, hitInfo)) {
+        glm::vec3 finalColor{ 0.f };
+
+        if (debugNormalInterpolation) {
+            // drawInterpolatedNormal(hitInfo, ray);
+            textureCoordinates(hitInfo, ray);
+        }
         
-        drawInterpolatedNormal(hitInfo, ray);
         // for all the lights in the scene
         for (const auto& light : scene.lights) {
-
+            
             // POINT LIGHT
             if (std::holds_alternative<PointLight>(light)) {
                 const PointLight pointlight = std::get<PointLight>(light);
@@ -288,8 +301,8 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
 
                         glm::vec3 currColor{ 0.f };
                         currColor += (colorZero * (1 - i * alpha) * (1 - j * alpha));
-                        currColor += (colorOne * (1 - i * alpha) * (j * alpha));
-                        currColor += (colorTwo * (i * alpha) * (1 - j * alpha));
+                        currColor += (colorTwo * (1 - i * alpha) * (j * alpha));
+                        currColor += (colorOne * (i * alpha) * (1 - j * alpha));
                         currColor += (colorThree * (i * alpha) * (j * alpha));
                         
                         // before we averrage, we save the color to show in debug ray
@@ -297,7 +310,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
 
                         currColor *= (alpha * alpha);
 
-                        glm::vec3 currPos = vertexZero + ((float)i * x_step + (float)j * y_step);
+                        glm::vec3 currPos = vertexZero + ((float) i * x_step + (float) j * y_step);
                         PointLight currPointLight = { currPos, currColor };
 
                         if (hitLightSuccess(bvh, ray, currPointLight.position)) {
@@ -345,7 +358,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
             glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
             Ray reflectedRay = { intersectionPoint,  reflectedVector };
 
-            finalColor = hitInfo.material.ks * (recursiveRayTracer(scene, bvh, reflectedRay, level + 1, maxLevel));
+            finalColor = hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel));
         }
 
         return finalColor;
@@ -362,7 +375,7 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
 {
     int startLevel = 0;
     int maxLevel = 6;
-    return recursiveRayTracer(scene, bvh, ray, startLevel, maxLevel);
+    return recursive_ray_tracer(scene, bvh, ray, startLevel, maxLevel);
 
     // Lights are stored in a single array (scene.lights) where each item can be either a PointLight, SegmentLight or ParallelogramLight.
     // You can check whether a light at index i is a PointLight using std::holds_alternative:
@@ -450,8 +463,10 @@ int main(int argc, char** argv)
     Scene scene = loadScene(sceneType, dataPath);
     BoundingVolumeHierarchy bvh { &scene };
 
+    // debug buttons gui
     int bvhDebugLevel = 0;
     bool debugBVH { false };
+
     ViewMode viewMode { ViewMode::Rasterization };
 
     window.registerKeyCallback([&](int key, int /* scancode */, int action, int /* mods */) {
@@ -519,6 +534,7 @@ int main(int argc, char** argv)
         ImGui::Text("Debugging");
         if (viewMode == ViewMode::Rasterization) {
             ImGui::Checkbox("Draw BVH", &debugBVH);
+            ImGui::Checkbox("Draw Interpolated Normals", &debugNormalInterpolation);
             if (debugBVH)
                 ImGui::SliderInt("BVH Level", &bvhDebugLevel, 0, bvh.numLevels() - 1);
         }
