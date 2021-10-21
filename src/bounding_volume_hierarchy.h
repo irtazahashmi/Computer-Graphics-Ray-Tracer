@@ -4,6 +4,34 @@
 #include <array>
 #include <span>
 
+struct Node {
+    AxisAlignedBox data;
+    bool isLeaf;
+    int level;
+    std::vector <int> indices;
+};
+
+struct BvhComparatorX {
+    inline bool operator() (const std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple1, std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple2)
+    {
+        return (get<0>(tuple1).x + get<1>(tuple1).x + get<2>(tuple1).x < get<0>(tuple2).x + get<1>(tuple2).x + get<2>(tuple2).x);
+    }
+};
+
+struct BvhComparatorY {
+    inline bool operator() (const std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple1, std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple2)
+    {
+        return (get<0>(tuple1).y + get<1>(tuple1).y + get<2>(tuple1).y < get<0>(tuple2).y + get<1>(tuple2).y + get<2>(tuple2).y);
+    }
+};
+
+struct BvhComparatorZ {
+    inline bool operator() (const std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple1, std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple2)
+    {
+        return (get<0>(tuple1).z + get<1>(tuple1).z + get<2>(tuple1).z < get<0>(tuple2).z + get<1>(tuple2).z + get<2>(tuple2).z);
+    }
+};
+
 class BoundingVolumeHierarchy {
 public:
     BoundingVolumeHierarchy(Scene* pScene);
