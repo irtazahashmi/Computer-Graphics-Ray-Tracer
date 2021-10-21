@@ -13,6 +13,7 @@ struct Node {
     std::vector <int> indices;
 };
 
+
 // Comparator for the x axis
 // Compare the sum of the x axis of each vertex in each tuple with each other
 struct BvhComparatorX {

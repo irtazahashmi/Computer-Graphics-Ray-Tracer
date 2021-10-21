@@ -13,6 +13,9 @@ std::vector<Node> binary_tree;
 
 std::vector<std::tuple<Vertex, Vertex, Vertex, Material>> triangles;
 
+// max bvh level
+const int MAX_LEVEL = 10;
+
 /// <summary>
 /// This function splits the triangles from the parent node, into two vectors 
 /// which two vectors are used to create the axis-aligned-boxes for the cildren
@@ -122,7 +125,7 @@ void recursiveStepBvh(int index_parent_node, int level, int max_level) {
     binary_tree[index_parent_node].data = AxisAlignedBox{ lower,upper };
 
     //Now the function checks you havent reached the max level and there are more triangles to split
-    if (level < max_level && binary_tree[index_parent_node].indices.size()>1) {
+    if (level < max_level && binary_tree[index_parent_node].indices.size() > 1) {
 
         //Declare the two children nodes the left and the right one
         Node left;
@@ -232,14 +235,14 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
     binary_tree.push_back(root);
 
     //Call the recursive function
-    recursiveStepBvh(i, 0, 10);
+    recursiveStepBvh(i, 0, MAX_LEVEL);
 }
 
 // Return the depth of the tree that you constructed. This is used to tell the
 // slider in the UI how many steps it should display.
 int BoundingVolumeHierarchy::numLevels() const
 {
-    return 11;
+    return MAX_LEVEL + 1;
 }
 
 // Use this function to visualize your BVH. This can be useful for debugging. Use the functions in
