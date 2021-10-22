@@ -37,7 +37,7 @@ bool pointInTriangle(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& 
     float insideEdgeThree = glm::dot(n, glm::cross(triangleEdgeThree, trianglePointThree));
 
     // point p inside the trianlge conditions
-    float epsilon = (float) 1E-6;
+    double epsilon = (double) 1E-10;
     if (insideEdgeOne > epsilon && insideEdgeTwo > epsilon && insideEdgeThree > epsilon) {
         // point p inside triangle
         return true;
@@ -76,7 +76,7 @@ bool intersectRayWithPlane(const Plane& plane, Ray& ray)
     float denominator = glm::dot(d, n);
 
     // if abs(denominator) < epsilon, ray is parrallel is to plane -> no intersection
-    float epsilon = (float) 1E-6;
+    double epsilon = (double) 1E-10;
     if (glm::abs(denominator) < epsilon) {
         return false;
     }

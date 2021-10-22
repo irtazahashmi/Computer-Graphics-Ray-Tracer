@@ -215,7 +215,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                         bvh.intersect(shadowRay, shadowRayInfo);
                         drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
                     }
-                }
+               }
    
             }
             // SEGMENT LIGHT
