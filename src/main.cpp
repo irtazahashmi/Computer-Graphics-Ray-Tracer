@@ -184,7 +184,7 @@ static std::tuple<float, float, float> getBarycentricWeights(glm::vec3 v0, glm::
         return  { alpha, beta, gamma };
     }
     else {
-        return { 0,0,0 };
+        return { 0.0f,0.0f,0.0f };
     }
 }
 
