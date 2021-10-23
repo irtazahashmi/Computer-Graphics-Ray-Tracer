@@ -155,36 +155,65 @@ static bool hitLightSuccess(const BoundingVolumeHierarchy& bvh, Ray ray, glm::ve
     return false;
 }
 
-
+/// <summary>
+/// Calculate the barycentric weights using the three vertices of the triangle and the intersection point.
+/// It is always already checked before calling this method whether the intersection point is actually in the triangle
+/// with bvh.intersect, so the if statement is not really necessary.
+/// </summary>
+/// <param name="v0">First vertex of triangle</param>
+/// <param name="v1">Second vertex of triangle</param>
+/// <param name="v2">Third vertex of triangle</param>
+/// <param name="p">Intersection point</param>
+/// <returns>A tuple with the three barycentric weights</returns>
 static std::tuple<float, float, float> getBarycentricWeights(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3& p) {
-    //std::cout << v0.x << " " << v0.y << " " << v0.z << "-----" << std::endl;
+    // Calculate the area of each sub-triangle
     float A = glm::length(glm::cross(v1 - p, v2 - p)) / 2;
     float B = glm::length(glm::cross(v0 - p, v2 - p)) / 2;
     float C = glm::length(glm::cross(v0 - p, v1 - p)) / 2;
+
+    // Calculate the total area
     float totalArea = glm::length(glm::cross(v2 - v0, v1 - v0)) / 2;
+
+    // Calculate the weights
     float alpha = A / totalArea;
     float beta = B / totalArea;
     float gamma = C / totalArea;
-    //std::cout << "alpha: " << A << " beta: " << B << " gamma: " << C << std::endl;
-    return  { alpha, beta, gamma };
+
+    // Check whether p is inside the triangle
+    if (alpha + beta + gamma == 1) {
+        return  { alpha, beta, gamma };
+    }
+    else {
+        return { 0,0,0 };
+    }
 }
 
+/// <summary>
+/// Calculate the interpolated normal given the information from the triangle
+/// and the ray.
+/// </summary>
+/// <param name="hitInfo">The info from the triangle where the ray hits</param>
+/// <param name="ray">The ray where you want to calculate the interpolated normal</param>
 static void drawInterpolatedNormal(HitInfo& hitInfo, Ray& ray) {
-    //std::cout << hitInfo.v0.texCoord.x << std::endl;
+    // Draw the normals from the vertices of the triangle
     drawRay({ hitInfo.v0.position, hitInfo.v0.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
     drawRay({ hitInfo.v1.position, hitInfo.v1.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
     drawRay({ hitInfo.v2.position, hitInfo.v2.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
 
+    // Calculate the intersection point
     glm::vec3 p = ray.origin + ray.t * ray.direction;
 
-    if (hitInfo.v0.normal != glm::vec3{ 0 }) {
-        std::tuple<float, float, float> weights = getBarycentricWeights(hitInfo.v0.position, hitInfo.v1.position, hitInfo.v2.position, p);
-        float alpha = get<0>(weights);
-        float beta = get<1>(weights);
-        float gamma = get<2>(weights);
-        hitInfo.normal = alpha * hitInfo.v0.normal + beta * hitInfo.v1.normal + gamma * hitInfo.v2.normal;
-        drawRay({ p, hitInfo.normal, ray.t }, glm::vec3(0.0f, 0.0f, 1.0f));
-    }
+    // Calculate the barycentric weights
+    std::tuple<float, float, float> weights = getBarycentricWeights(hitInfo.v0.position, hitInfo.v1.position, hitInfo.v2.position, p);
+    float alpha = get<0>(weights);
+    float beta = get<1>(weights);
+    float gamma = get<2>(weights);
+
+    // Calculate the interpolated normal by using the normals of the vertices and the barycentric weights
+    hitInfo.normal = alpha * hitInfo.v0.normal + beta * hitInfo.v1.normal + gamma * hitInfo.v2.normal;
+
+    // Draw the interpolated normal
+    drawRay({ p, hitInfo.normal, ray.t }, glm::vec3(0.0f, 0.0f, 1.0f));
 }
 
 static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray, int level, int maxLevel) {
@@ -197,16 +226,23 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
         }
 
         if (debugTextures) {
+            // First get the ray from cameraview to the pixel
             glm::vec3 p = ray.origin + ray.t * ray.direction;
+
+            // Calculate the barycentric weights
             std::tuple<float, float, float> weights = getBarycentricWeights(hitInfo.v0.position, hitInfo.v1.position, hitInfo.v2.position, p);
             float alpha = get<0>(weights);
             float beta = get<1>(weights);
             float gamma = get<2>(weights);
+
+            // Calculate the texture coordinates using the barycentric weights
             glm::vec2 textureCoordinates = alpha * hitInfo.v0.texCoord + beta * hitInfo.v1.texCoord + gamma * hitInfo.v2.texCoord;
 
+            // The image used for the texture, uncomment the bricks one and you'll get the bricks pattern
             //Image image = Image("../../../data/bricks.jpg");
             Image image = Image("../../../data/default.png");
 
+            // Calculate the texel
             return image.getTexel(textureCoordinates);
         }
         else {
@@ -325,7 +361,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                             currColor += (colorOne * (i * alpha) * (1 - j * alpha));
                             currColor += (colorThree * (i * alpha) * (j * alpha));
 
-                            // before we averrage, we save the color to show in debug ray
+                            // before we average, we save the color to show in debug ray
                             glm::vec3 debugRayColor = currColor;
 
                             currColor *= (alpha * alpha);
@@ -465,12 +501,7 @@ static void renderRayTracing(const Scene& scene, const Trackball& camera, const 
                     float(y) / windowResolution.y * 2.0f - 1.0f
                 };
                 const Ray cameraRay = camera.generateRay(normalizedPixelPos);
-                //if (debugTextures) {
-                //    screen.setPixel(x, y, getTexture(scene, bvh, cameraRay));
-                //}
-                //else {
-                    screen.setPixel(x, y, getFinalColor(scene, bvh, cameraRay));
-                //}
+                screen.setPixel(x, y, getFinalColor(scene, bvh, cameraRay));
             }
         }
     });
@@ -572,7 +603,7 @@ int main(int argc, char** argv)
 
             ImGui::Checkbox("Draw Intersected But Not Visited Modes", &debugIntersectionAABB);
             ImGui::Checkbox("Draw Interpolated Normals", &debugNormalInterpolation);
-            ImGui::Checkbox("Draw Texture", &debugTextures);
+            ImGui::Checkbox("Add Texture", &debugTextures);
 
         }
 
