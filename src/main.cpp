@@ -36,6 +36,9 @@ constexpr glm::ivec2 windowResolution { 800, 800 }; // window resolution
 const std::filesystem::path dataPath { DATA_DIR };
 
 // if checked box in gui, will display debug rays for interpolated normals
+bool debugShadowRay{ false };
+bool debugAreaLights = { false };
+bool debugIntersectionAABB{ false };
 bool debugNormalInterpolation{ false };
 
 enum class ViewMode {
@@ -193,8 +196,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
         glm::vec3 finalColor{ 0.f };
 
         if (debugNormalInterpolation) {
-            // drawInterpolatedNormal(hitInfo, ray);
-            textureCoordinates(hitInfo, ray);
+            drawInterpolatedNormal(hitInfo, ray);
         }
         
         // for all the lights in the scene
@@ -210,15 +212,17 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                     finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
                 }
                 else {
-                    // debug shadow ray: shadow ray occluded - hits something other than light -> red ray
-                    glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+                    if (debugShadowRay) {
+                        // debug shadow ray: shadow ray occluded - hits something other than light -> red ray
+                        glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
 
-                    Ray shadowRay;
-                    shadowRay.origin = intersectionPointRay;
-                    shadowRay.direction = -(intersectionPointRay - pointlight.position);
-                    HitInfo shadowRayInfo;
-                    bvh.intersect(shadowRay, shadowRayInfo);
-                    drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+                        Ray shadowRay;
+                        shadowRay.origin = intersectionPointRay;
+                        shadowRay.direction = -(intersectionPointRay - pointlight.position);
+                        HitInfo shadowRayInfo;
+                        bvh.intersect(shadowRay, shadowRayInfo);
+                        drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+                    }
                 }
    
             }
@@ -252,24 +256,28 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
 
                         // debug ray: segment lights
                         // drawing all the sampled rays that hit the ligth with their color
-                        Ray tempLightRay;
-                        tempLightRay.origin = currPos;
-                        glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
-                        tempLightRay.direction = glm::normalize(intersectionPointRay - tempLightRay.origin);
-                        HitInfo hitInfo;
-                        bvh.intersect(tempLightRay, hitInfo);
-                        drawRay(tempLightRay, currColor);
+                        if (debugAreaLights) {
+                            Ray tempLightRay;
+                            tempLightRay.origin = currPos;
+                            glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+                            tempLightRay.direction = glm::normalize(intersectionPointRay - tempLightRay.origin);
+                            HitInfo hitInfo;
+                            bvh.intersect(tempLightRay, hitInfo);
+                            drawRay(tempLightRay, currColor);
+                        }
                     }
                     else {
-                        // if the rays are not hitting the light, we make them red
-                        glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+                        if (debugAreaLights) {
+                            // if the rays are not hitting the light, we make them red
+                            glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
 
-                        Ray shadowRay;
-                        shadowRay.origin = intersectionPointRay;
-                        shadowRay.direction = -(intersectionPointRay - currPos);
-                        HitInfo shadowRayInfo;
-                        bvh.intersect(shadowRay, shadowRayInfo);
-                        drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+                            Ray shadowRay;
+                            shadowRay.origin = intersectionPointRay;
+                            shadowRay.direction = -(intersectionPointRay - currPos);
+                            HitInfo shadowRayInfo;
+                            bvh.intersect(shadowRay, shadowRayInfo);
+                            drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+                        }
                     }
                 }
 
@@ -320,24 +328,28 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
 
                             // debug ray: parallelogram lights
                             // drawing all the sampled rays that hit the ligth with their color
-                            Ray tempLightRay;
-                            tempLightRay.origin = currPos;
-                            glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
-                            tempLightRay.direction = glm::normalize(intersectionPointRay - tempLightRay.origin);
-                            HitInfo hitInfo;
-                            bvh.intersect(tempLightRay, hitInfo);
-                            drawRay(tempLightRay, debugRayColor);
+                            if (debugAreaLights) {
+                                Ray tempLightRay;
+                                tempLightRay.origin = currPos;
+                                glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+                                tempLightRay.direction = glm::normalize(intersectionPointRay - tempLightRay.origin);
+                                HitInfo hitInfo;
+                                bvh.intersect(tempLightRay, hitInfo);
+                                drawRay(tempLightRay, debugRayColor);
+                            }
                         }
                         else {
                             // if the rays are not hitting the light, we make them red
                             glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
 
-                            Ray shadowRay;
-                            shadowRay.origin = intersectionPointRay;
-                            shadowRay.direction = -(intersectionPointRay - currPos);
-                            HitInfo shadowRayInfo;
-                            bvh.intersect(shadowRay, shadowRayInfo);
-                            drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+                            if (debugAreaLights) {
+                                Ray shadowRay;
+                                shadowRay.origin = intersectionPointRay;
+                                shadowRay.direction = -(intersectionPointRay - currPos);
+                                HitInfo shadowRayInfo;
+                                bvh.intersect(shadowRay, shadowRayInfo);
+                                drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+                            }
                         }       
                     }
                 }
@@ -533,10 +545,16 @@ int main(int argc, char** argv)
         ImGui::Separator();
         ImGui::Text("Debugging");
         if (viewMode == ViewMode::Rasterization) {
+            ImGui::Checkbox("Draw Shadow Debug Ray", &debugShadowRay);
+            ImGui::Checkbox("Draw Area Lights", &debugAreaLights);
             ImGui::Checkbox("Draw BVH", &debugBVH);
-            ImGui::Checkbox("Draw Interpolated Normals", &debugNormalInterpolation);
+
             if (debugBVH)
                 ImGui::SliderInt("BVH Level", &bvhDebugLevel, 0, bvh.numLevels() - 1);
+
+            ImGui::Checkbox("Draw Intersected But Not Visited Modes", &debugIntersectionAABB);
+            ImGui::Checkbox("Draw Interpolated Normals", &debugNormalInterpolation);
+
         }
 
         ImGui::Spacing();
