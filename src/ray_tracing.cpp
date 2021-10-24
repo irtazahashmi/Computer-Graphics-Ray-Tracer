@@ -310,7 +310,7 @@ bool intersectRayWithShape(const Sphere& sphere, Ray& ray, HitInfo& hitInfo)
 * @param axisAlignedBox and the ray
 * @return true if there is an intersection, false otherwise
 */
-bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray)
+bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray, float& t)
 {
     // using txmin = (xmin - ox) / dx as an example to find all six sides of the box -> src: lecture slides
     // X components
@@ -345,13 +345,13 @@ bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray)
     // there is an intersection of ray and AABB
     if (tIn < ray.t) {
         // if the intersection is behind the origin of the ray, then update ray.t as tOut
-        //if (tIn < 0) {
-        //    ray.t = tOut;
-        //}
-        //else {
+        if (tIn < 0) {
+            t = tOut;
+        }
+        else {
             // else the intersection is infront. update ray.t as tIn (where the ray hits the box) and return true
-        //    ray.t = tIn;
-        //}
+            t = tIn;
+        }
 
         return true;
     }

@@ -361,7 +361,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
             glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
             Ray reflectedRay = { intersectionPoint,  reflectedVector };
 
-            finalColor = hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel));
+            finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel));
         }
 
         return finalColor;
@@ -494,7 +494,8 @@ int main(int argc, char** argv)
         // === Setup the UI ===
         ImGui::Begin("Final Project");
         {
-            constexpr std::array items { "SingleTriangle", "Cube (segment light)", "Cornell Box (with mirror)", "Cornell Box (parallelogram light and mirror)", "Monkey", "Teapot", "Dragon", /* "AABBs",*/ "Spheres", /*"Mixed",*/ "Custom" };
+            constexpr std::array items { "SingleTriangle", "Cube (segment light)", "Cornell Box (with mirror)", 
+                "Cornell Box (parallelogram light and mirror)", "Monkey", "Teapot", "Dragon", /* "AABBs",*/ "Spheres", /*"Mixed",*/ "Custom", "Dragon2", "Donut"};
             if (ImGui::Combo("Scenes", reinterpret_cast<int*>(&sceneType), items.data(), int(items.size()))) {
                 optDebugRay.reset();
                 scene = loadScene(sceneType, dataPath);

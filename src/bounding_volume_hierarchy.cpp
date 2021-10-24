@@ -7,7 +7,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
 #include <tuple> // for tuple
-
+#include <queue>
+#include <iostream>
 //Declare the binary tree as a global variable, where we are going to store all the information about the bvh for each node
 std::vector<Node> binary_tree;
 
@@ -236,6 +237,14 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
 
     //Call the recursive function
     recursiveStepBvh(i, 0, MAX_LEVEL);
+    int tot = 0; int cnt = 0;
+    for (int i = 0; i < binary_tree.size(); i++) {
+        if (binary_tree[i].isLeaf) {
+            tot += binary_tree[i].indices.size();
+            cnt++;
+        }
+    }
+    std::cout << tot << " " << cnt << std::endl;
 }
 
 // Return the depth of the tree that you constructed. This is used to tell the
@@ -257,104 +266,80 @@ void BoundingVolumeHierarchy::debugDraw(int level)
         }
     }
 }
-/*
-bool intersectAABB(Ray& ray, HitInfo& hitInfo, Node& parent) {
-    bool hit = false;
-    // if the ray intersects with the parent node
-    if (intersectRayWithShape(parent.data, ray)) {
-        if (debugIntersectionAABB) {
-            drawAABB(parent.data, DrawMode::Wireframe, glm::vec3(1.0f));
-        }
-        // if we have reached a leaf, check the triangles
-        if (parent.isLeaf) {
-            float t = ray.t;
-            for (int index : parent.indices) {
-                
-                const auto v0 = get<0>(triangles[index]);
-                const auto v1 = get<1>(triangles[index]);
-                const auto v2 = get<2>(triangles[index]);
-                if (intersectRayWithTriangle(v0.position, v1.position, v2.position, ray, hitInfo)) {
-                    if (ray.t < t) {
 
-                        hitInfo.material = get<3>(triangles[index]);
-                        hit = true;
-
-                        hitInfo.v0 = v0;
-                        hitInfo.v1 = v1;
-                        hitInfo.v2 = v2;
-                    }
-                }
-            }
-        }
-        // else recursive function of the children
-        else {
-            return intersectAABB(ray, hitInfo, binary_tree[parent.indices[0]]) || intersectAABB(ray, hitInfo, binary_tree[parent.indices[1]]);
-        }
-        return hit;
+struct AABBwithIntersection{
+    float t;
+    int index;
+    AABBwithIntersection(float tin, int indx) : t(tin), index(indx){}
+    bool operator<(const struct AABBwithIntersection& other) const
+    {
+        return t < other.t;
     }
-    return hit;
-} */
+};
 
 // Return true if something is hit, returns false otherwise. Only find hits if they are closer than t stored
 // in the ray and if the intersection is on the correct side of the origin (the new t >= 0). Replace the code
 // by a bounding volume hierarchy acceleration structure as described in the assignment. You can change any
 // file you like, including bounding_volume_hierarchy.h .
+
+
 bool BoundingVolumeHierarchy::intersect(Ray& ray, HitInfo& hitInfo) const
 {
     bool hit = false;
     // Intersect with all triangles of all meshes.
     float t = ray.t;
-    std::vector<int> binary_tree_indeces;
-    binary_tree_indeces.push_back(0);
-    while (binary_tree_indeces.size() > 0) {
-        int current_index = binary_tree_indeces.back();
-        binary_tree_indeces.pop_back();
-        if (intersectRayWithShape(binary_tree[current_index].data, ray)) {
-            if (debugIntersectionAABB) {
-                drawAABB(binary_tree[current_index].data, DrawMode::Wireframe, glm::vec3(1.0f));
-            }
+    //std::vector<int> binary_tree_indeces;
+    std::priority_queue<AABBwithIntersection> pq;
+    //binary_tree_indeces.push_back(0);
+    pq.push(AABBwithIntersection(std::numeric_limits<float>::max(),0));
+    float tempT = pq.top().t;
+
+    //If there is intersection with the very first AABB then we check for its children
+    if (intersectRayWithShape(binary_tree[0].data, ray, tempT)) {
+        //While we have intersected AABBs that are not yet traversed we do the following
+        while (pq.size() > 0) {
+            int current_index = pq.top().index;
+            //float tempT = pq.top().t;
+            //Remove first element (parent node)
+            pq.pop();
+            
             if (binary_tree[current_index].isLeaf) {
-                for (int i = 0; i < triangles.size(); i++) {
-                    Vertex v0 = get<0>(triangles[i]);
-                    Vertex v1 = get<1>(triangles[i]);
-                    Vertex v2 = get<2>(triangles[i]);
+                if (debugIntersectionAABB) {
+                    drawAABB(binary_tree[current_index].data, DrawMode::Wireframe, glm::vec3(1.0f, 0.0f, 0.0f));
+                }
+                for (int i = 0; i < binary_tree[current_index].indices.size(); i++) {
+                    Vertex v0 = get<0>(triangles[binary_tree[current_index].indices[i]]);
+                    Vertex v1 = get<1>(triangles[binary_tree[current_index].indices[i]]);
+                    Vertex v2 = get<2>(triangles[binary_tree[current_index].indices[i]]);
                     if (intersectRayWithTriangle(v0.position, v1.position, v2.position, ray, hitInfo)) {
-                        if (ray.t < t) {
-                            hitInfo.material = get<3>(triangles[i]);
-                            hit = true;
-                            hitInfo.v0 = v0;
-                            hitInfo.v1 = v1;
-                            hitInfo.v2 = v2;
-                        }
+                        //if (ray.t < t) {
+                        hitInfo.material = get<3>(triangles[i]);
+                        //ray.t = t;
+                        hit = true;
+                        hitInfo.v0 = v0;
+                        hitInfo.v1 = v1;
+                        hitInfo.v2 = v2;
+                        //}
                     }
                 }
-                break;
+                //break;
             }
             else {
-                binary_tree_indeces.push_back(binary_tree[current_index].indices[0]);
-                binary_tree_indeces.push_back(binary_tree[current_index].indices[1]);
+                tempT = std::numeric_limits<float>::max();
+                //Check for in intersection with the left child
+                if (intersectRayWithShape(binary_tree[binary_tree[current_index].indices[0]].data, ray, tempT)) {
+                    //If there is we push the AABB to our pq
+                    pq.push(AABBwithIntersection(tempT, binary_tree[current_index].indices[0]));
+                }
+                tempT = std::numeric_limits<float>::max();
+                //Check for in intersection with the left child
+                if (intersectRayWithShape(binary_tree[binary_tree[current_index].indices[1]].data, ray, tempT)) {
+                    //If there is we push the AABB to our pq
+                    pq.push(AABBwithIntersection(tempT, binary_tree[current_index].indices[1]));
+                }
             }
         }
     }
-    /*
-    for (const auto& mesh : m_pScene->meshes) {
-        float t = ray.t;
-        for (const auto& tri : mesh.triangles) {
-            const auto v0 = mesh.vertices[tri[0]];
-            const auto v1 = mesh.vertices[tri[1]];
-            const auto v2 = mesh.vertices[tri[2]];
-            if (intersectRayWithTriangle(v0.position, v1.position, v2.position, ray, hitInfo)) {
-                if (ray.t < t) {
-                    hitInfo.material = mesh.material;
-                    hit = true;
-                    hitInfo.v0 = v0;
-                    hitInfo.v1 = v1;
-                    hitInfo.v2 = v2;
-                }
-            }
-        }
-    }*/
-
      
     // Intersect with spheres.
     for (const auto& sphere : m_pScene->spheres)
