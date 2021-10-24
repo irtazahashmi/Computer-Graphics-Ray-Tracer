@@ -244,6 +244,7 @@ BoundingVolumeHierarchy::BoundingVolumeHierarchy(Scene* pScene)
             cnt++;
         }
     }
+    std::cout << tot << " " << cnt << std::endl;
 }
 
 // Return the depth of the tree that you constructed. This is used to tell the
