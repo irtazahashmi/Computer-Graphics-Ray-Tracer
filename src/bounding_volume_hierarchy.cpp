@@ -267,62 +267,82 @@ void BoundingVolumeHierarchy::debugDraw(int level)
     }
 }
 
-struct AABBwithIntersection{
+/// <summary>
+/// New structure just to be used in the next function when we  will need to use 
+/// priority queue in a tuple (see next function)
+/// </summary>
+struct AABBwithIntersection {
+    //t the value for the ray for which it intersects with the box that is stored 
+    //the binary tree at [index]
     float t;
     int index;
-    AABBwithIntersection(float tin, int indx) : t(tin), index(indx){}
+    //Default constructor
+    AABBwithIntersection(float tin, int indx) : t(tin), index(indx) {}
+    //Operator we are going to use when adding elements in the pq
     bool operator<(const struct AABBwithIntersection& other) const
     {
         return t < other.t;
     }
 };
 
-// Return true if something is hit, returns false otherwise. Only find hits if they are closer than t stored
-// in the ray and if the intersection is on the correct side of the origin (the new t >= 0). Replace the code
-// by a bounding volume hierarchy acceleration structure as described in the assignment. You can change any
-// file you like, including bounding_volume_hierarchy.h .
 
+/// <summary>
+/// Return true if something is hit, returns false otherwise. only find hits if they are closer than t stored
+/// First using the binary tree we have constructed we can iterate through all the necessary nodes and we can check
+/// For the leaves that intersect with our ray we check all the triangles inside of them and store the value/info
+/// for the closest one. Then we check for all the spheres in the scene using the function that we  have implemented
+/// in the ray_tracing.cpp
+/// </summary>
+/// <param name="ray"> The ray </param>
+/// <param name="hitInfo"> Hit Info, conatins information for the 'hit' triangle, vertices, material and normal</param>
+/// <returns> true / false as specified in summary </returns>
 
 bool BoundingVolumeHierarchy::intersect(Ray& ray, HitInfo& hitInfo) const
 {
+    //Declare a boolean and set as false (assuming there are no intersections)
     bool hit = false;
-    // Intersect with all triangles of all meshes.
-    float t = ray.t;
-    //std::vector<int> binary_tree_indeces;
+    
+    //The priority queue, where are we going to store all the visited (intersected) nodes (index and intersection point)
     std::priority_queue<AABBwithIntersection> pq;
-    //binary_tree_indeces.push_back(0);
+
+    //Push the root into the pq
     pq.push(AABBwithIntersection(std::numeric_limits<float>::max(),0));
+
+    //Declare a tempT value which we are going to use when declaring new 'tuples' for our pq
     float tempT = pq.top().t;
 
     //If there is intersection with the very first AABB then we check for its children
     if (intersectRayWithShape(binary_tree[0].data, ray, tempT)) {
         //While we have intersected AABBs that are not yet traversed we do the following
         while (pq.size() > 0) {
+            //Store the index of the first element of the queue
             int current_index = pq.top().index;
-            //float tempT = pq.top().t;
+
             //Remove first element (parent node)
             pq.pop();
             
+            //If needed(asked) we draw the boxes that we are visiting
+            if (debugIntersectionAABB) {
+                drawAABB(binary_tree[current_index].data, DrawMode::Wireframe, glm::vec3(1.0f, 0.0f, 0.0f));
+            }
+
+            //If the node we are currently is a leaf then we check all the triangles
             if (binary_tree[current_index].isLeaf) {
-                if (debugIntersectionAABB) {
-                    drawAABB(binary_tree[current_index].data, DrawMode::Wireframe, glm::vec3(1.0f, 0.0f, 0.0f));
-                }
+                //Iterate through all the triangle_indices that are stored in the leaf vector
                 for (int i = 0; i < binary_tree[current_index].indices.size(); i++) {
+                    //Get the info for all the vertices for each triangle
                     Vertex v0 = get<0>(triangles[binary_tree[current_index].indices[i]]);
                     Vertex v1 = get<1>(triangles[binary_tree[current_index].indices[i]]);
                     Vertex v2 = get<2>(triangles[binary_tree[current_index].indices[i]]);
+                    //If there is a closer intersection of our ray with a triangle we update the hitinfo and the hit boolean
                     if (intersectRayWithTriangle(v0.position, v1.position, v2.position, ray, hitInfo)) {
-                        //if (ray.t < t) {
                         hitInfo.material = get<3>(triangles[i]);
-                        //ray.t = t;
                         hit = true;
                         hitInfo.v0 = v0;
                         hitInfo.v1 = v1;
                         hitInfo.v2 = v2;
-                        //}
                     }
                 }
-                //break;
             }
             else {
                 tempT = std::numeric_limits<float>::max();
