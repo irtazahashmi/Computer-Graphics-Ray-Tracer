@@ -287,7 +287,7 @@ struct AABBwithIntersection {
 
 /// <summary>
 /// Return true if something is hit, returns false otherwise. only find hits if they are closer than t stored
-/// First using the binary tree we have constructed we can iterate through all the necessary nodes and we can check
+/// First using the binary tree we have constructed we can iterate through all the necessary nodes
 /// For the leaves that intersect with our ray we check all the triangles inside of them and store the value/info
 /// for the closest one. Then we check for all the spheres in the scene using the function that we  have implemented
 /// in the ray_tracing.cpp
