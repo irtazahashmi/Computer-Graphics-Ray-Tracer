@@ -4,6 +4,43 @@
 #include <array>
 #include <span>
 
+extern bool debugIntersectionAABB;
+
+struct Node {
+    AxisAlignedBox data;
+    bool isLeaf;
+    int level;
+    std::vector <int> indices;
+};
+
+
+// Comparator for the x axis
+// Compare the sum of the x axis of each vertex in each tuple with each other
+struct BvhComparatorX {
+    inline bool operator() (const std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple1, std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple2)
+    {
+        return (get<0>(tuple1).x + get<1>(tuple1).x + get<2>(tuple1).x < get<0>(tuple2).x + get<1>(tuple2).x + get<2>(tuple2).x);
+    }
+};
+
+// Comparator for the y axis
+// Compare the sum of the y axis of each vertex in each tuple with each other
+struct BvhComparatorY {
+    inline bool operator() (const std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple1, std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple2)
+    {
+        return (get<0>(tuple1).y + get<1>(tuple1).y + get<2>(tuple1).y < get<0>(tuple2).y + get<1>(tuple2).y + get<2>(tuple2).y);
+    }
+};
+
+// Comparator for the z axis
+// Compare the sum of the z axis of each vertex in each tuple with each other
+struct BvhComparatorZ {
+    inline bool operator() (const std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple1, std::tuple<glm::vec3, glm::vec3, glm::vec3, int> tuple2)
+    {
+        return (get<0>(tuple1).z + get<1>(tuple1).z + get<2>(tuple1).z < get<0>(tuple2).z + get<1>(tuple2).z + get<2>(tuple2).z);
+    }
+};
+
 class BoundingVolumeHierarchy {
 public:
     BoundingVolumeHierarchy(Scene* pScene);

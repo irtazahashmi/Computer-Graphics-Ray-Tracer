@@ -37,7 +37,7 @@ bool pointInTriangle(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& 
     float insideEdgeThree = glm::dot(n, glm::cross(triangleEdgeThree, trianglePointThree));
 
     // point p inside the trianlge conditions
-    float epsilon = (float) 1E-6;
+    double epsilon = (double) 1E-10;
     if (insideEdgeOne > epsilon && insideEdgeTwo > epsilon && insideEdgeThree > epsilon) {
         // point p inside triangle
         return true;
@@ -76,7 +76,7 @@ bool intersectRayWithPlane(const Plane& plane, Ray& ray)
     float denominator = glm::dot(d, n);
 
     // if abs(denominator) < epsilon, ray is parrallel is to plane -> no intersection
-    float epsilon = (float) 1E-6;
+    double epsilon = (double) 1E-10;
     if (glm::abs(denominator) < epsilon) {
         return false;
     }
@@ -310,7 +310,7 @@ bool intersectRayWithShape(const Sphere& sphere, Ray& ray, HitInfo& hitInfo)
 * @param axisAlignedBox and the ray
 * @return true if there is an intersection, false otherwise
 */
-bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray)
+bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray, float& t)
 {
     // using txmin = (xmin - ox) / dx as an example to find all six sides of the box -> src: lecture slides
     // X components
@@ -346,11 +346,11 @@ bool intersectRayWithShape(const AxisAlignedBox& box, Ray& ray)
     if (tIn < ray.t) {
         // if the intersection is behind the origin of the ray, then update ray.t as tOut
         if (tIn < 0) {
-            ray.t = tOut;
+            t = tOut;
         }
         else {
             // else the intersection is infront. update ray.t as tIn (where the ray hits the box) and return true
-            ray.t = tIn;
+            t = tIn;
         }
 
         return true;
