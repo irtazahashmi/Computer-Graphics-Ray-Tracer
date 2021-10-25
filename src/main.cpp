@@ -41,6 +41,7 @@ bool debugAreaLights = { false };
 bool debugIntersectionAABB{ false };
 bool debugNormalInterpolation{ false };
 bool debugTextures{ false };
+bool debugTransparency{ false };
 
 enum class ViewMode {
     Rasterization = 0,
@@ -215,6 +216,10 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
     HitInfo hitInfo;
     if (bvh.intersect(ray, hitInfo)) {
         glm::vec3 finalColor{ 0.f };
+
+        if (debugNormalInterpolation) {
+            drawInterpolatedNormal(hitInfo, ray);
+        }
         
         if (debugTextures) {
             // First get the ray from cameraview to the pixel
@@ -246,7 +251,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                     const PointLight pointlight = std::get<PointLight>(light);
 
                     // Hard shdow - if the point is in light, calculate color, else in shadow.
-                    if (hitLightSuccess(bvh, ray, pointlight.position)) {
+                    if (hitLightSuccess(bvh, ray, pointlight.position) || debugTransparency) {
                         finalColor += pointlight.color * calculateDiffuse(pointlight, hitInfo, ray);
                         finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
                     }
@@ -395,7 +400,15 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                 }
             }
 
+            if (debugTransparency) {
+                //glm::vec4 transparencyColor{ finalColor, 0.0f };
+                //transparencyColor.w += hitInfo.material.transparency;
+                //std::cout << transparencyColor.w << std::endl;
+            }
+
             // drawing the camera ray using the final color
+            //std::cout << finalColor.x << " " << finalColor.y << " " << finalColor.z << std::endl;
+
             drawRay(ray, finalColor);
 
             // everytime the ray intersects a specular surface, trace another ray in the mirror-reflection direction
@@ -409,19 +422,17 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                 glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
                 Ray reflectedRay = { intersectionPoint,  reflectedVector };
 
-                finalColor = hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel));
+                finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel));
             }
         }
 
-        if (debugNormalInterpolation) {
-            drawInterpolatedNormal(hitInfo, ray);
-        }
-
+        
         return finalColor;
     }
     else {
         // Draw a red debug ray if the ray missed.
         drawRay(ray, glm::vec3(1.0f, 0.0f, 0.0f));
+
         // Set the color of the pixel to black if the ray misses.
         return glm::vec3(0.0f);
     }
@@ -464,6 +475,12 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
     // loadScene function in scene.cpp). Custom lights will not be visible in rasterization view.
 }
 
+static glm::vec4 getFinalTransparencyColor(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray) {
+    HitInfo hitInfo;
+    glm::vec3 finalColor = getFinalColor(scene, bvh, ray);
+    return glm::vec4{ finalColor.x, finalColor.y, finalColor.z, hitInfo.material.transparency };
+}
+
 static void setOpenGLMatrices(const Trackball& camera);
 static void drawLightsOpenGL(const Scene& scene, const Trackball& camera, int selectedLight);
 static void drawSceneOpenGL(const Scene& scene);
@@ -496,6 +513,9 @@ static void renderRayTracing(const Scene& scene, const Trackball& camera, const 
                     float(y) / windowResolution.y * 2.0f - 1.0f
                 };
                 const Ray cameraRay = camera.generateRay(normalizedPixelPos);
+                if (debugTransparency) {
+                    screen.setPixelTransparent(x, y, getFinalTransparencyColor(scene, bvh, cameraRay));
+                }
                 screen.setPixel(x, y, getFinalColor(scene, bvh, cameraRay));
             }
         }
@@ -599,6 +619,7 @@ int main(int argc, char** argv)
             ImGui::Checkbox("Draw Intersected But Not Visited Modes", &debugIntersectionAABB);
             ImGui::Checkbox("Draw Interpolated Normals", &debugNormalInterpolation);
             ImGui::Checkbox("Add Texture", &debugTextures);
+            ImGui::Checkbox("Transparency", &debugTransparency);
 
         }
 

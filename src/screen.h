@@ -3,6 +3,7 @@
 DISABLE_WARNINGS_PUSH()
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 DISABLE_WARNINGS_POP()
 #include <filesystem>
 #include <vector>
@@ -13,6 +14,7 @@ public:
 
     void clear(const glm::vec3& color);
     void setPixel(int x, int y, const glm::vec3& color);
+    void setPixelTransparent(int x, int y, const glm::vec4& color);
 
     void writeBitmapToFile(const std::filesystem::path& filePath);
     void draw();
