@@ -400,15 +400,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                 }
             }
 
-            if (debugTransparency) {
-                //glm::vec4 transparencyColor{ finalColor, 0.0f };
-                //transparencyColor.w += hitInfo.material.transparency;
-                //std::cout << transparencyColor.w << std::endl;
-            }
-
             // drawing the camera ray using the final color
-            //std::cout << finalColor.x << " " << finalColor.y << " " << finalColor.z << std::endl;
-
             drawRay(ray, finalColor);
 
             // everytime the ray intersects a specular surface, trace another ray in the mirror-reflection direction
@@ -424,8 +416,22 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
 
                 finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel));
             }
+
+            if (debugTransparency) {
+                float transparency = hitInfo.material.transparency;
+                if (transparency < 1) {
+                    float background = 1 - transparency;
+                    glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
+                    Ray secondRay = { intersectionPoint, ray.direction };
+
+                    glm::vec3 backgroundColor = recursive_ray_tracer(scene, bvh, secondRay, level + 1, maxLevel);
+                    glm::vec3 oldFinalColor = finalColor;
+                    finalColor = transparency * oldFinalColor + background * backgroundColor;
+                }
+            }
         }
 
+        
         
         return finalColor;
     }
@@ -475,12 +481,6 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
     // loadScene function in scene.cpp). Custom lights will not be visible in rasterization view.
 }
 
-static glm::vec4 getFinalTransparencyColor(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray) {
-    HitInfo hitInfo;
-    glm::vec3 finalColor = getFinalColor(scene, bvh, ray);
-    return glm::vec4{ finalColor.x, finalColor.y, finalColor.z, hitInfo.material.transparency };
-}
-
 static void setOpenGLMatrices(const Trackball& camera);
 static void drawLightsOpenGL(const Scene& scene, const Trackball& camera, int selectedLight);
 static void drawSceneOpenGL(const Scene& scene);
@@ -513,9 +513,6 @@ static void renderRayTracing(const Scene& scene, const Trackball& camera, const 
                     float(y) / windowResolution.y * 2.0f - 1.0f
                 };
                 const Ray cameraRay = camera.generateRay(normalizedPixelPos);
-                if (debugTransparency) {
-                    screen.setPixelTransparent(x, y, getFinalTransparencyColor(scene, bvh, cameraRay));
-                }
                 screen.setPixel(x, y, getFinalColor(scene, bvh, cameraRay));
             }
         }

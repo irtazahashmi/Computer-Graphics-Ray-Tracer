@@ -37,14 +37,6 @@ void Screen::setPixel(int x, int y, const glm::vec3& color)
     m_textureData[i] = glm::vec4(color, 1.0f);
 }
 
-void Screen::setPixelTransparent(int x, int y, const glm::vec4& color)
-{
-    // In the window/camera class we use (0, 0) at the bottom left corner of the screen (as used by GLFW).
-    // OpenGL / stbi like the origin / (-1,-1) to be at the TOP left corner so transform the y coordinate.
-    const int i = (m_resolution.y - 1 - y) * m_resolution.x + x;
-    m_textureData[i] = color;
-}
-
 void Screen::writeBitmapToFile(const std::filesystem::path& filePath)
 {
     std::vector<glm::u8vec4> textureData8Bits(m_textureData.size());
