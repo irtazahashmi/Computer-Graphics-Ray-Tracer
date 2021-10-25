@@ -215,6 +215,10 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
     HitInfo hitInfo;
     if (bvh.intersect(ray, hitInfo)) {
         glm::vec3 finalColor{ 0.f };
+
+        if (debugNormalInterpolation) {
+            drawInterpolatedNormal(hitInfo, ray);
+        }
         
         if (debugTextures) {
             // First get the ray from cameraview to the pixel
@@ -409,12 +413,8 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                 glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
                 Ray reflectedRay = { intersectionPoint,  reflectedVector };
 
-                finalColor = hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel));
+                finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel));
             }
-        }
-
-        if (debugNormalInterpolation) {
-            drawInterpolatedNormal(hitInfo, ray);
         }
 
         return finalColor;
