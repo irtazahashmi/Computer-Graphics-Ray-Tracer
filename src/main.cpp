@@ -32,29 +32,406 @@ DISABLE_WARNINGS_POP()
 #include <variant>
 
 // This is the main application. The code in here does not need to be modified.
-constexpr glm::ivec2 windowResolution { 800, 800 };
+constexpr glm::ivec2 windowResolution { 800, 800 }; // window resolution
 const std::filesystem::path dataPath { DATA_DIR };
+
+// if checked box in gui, will display debug rays for interpolated normals
+bool debugShadowRay{ false };
+bool debugAreaLights = { false };
+bool debugIntersectionAABB{ false };
+bool debugNormalInterpolation{ false };
+bool debugTextures{ false };
 
 enum class ViewMode {
     Rasterization = 0,
     RayTracing = 1
 };
 
+/*
+* Calculates the diffuse term of the phong model using:
+*
+*           diffuse = kd * dot(N, L) 
+* 
+* where N is the normal and L is the light direction.
+* 
+* @param a point light, the hitInfo object and the ray
+* @return a vector of the diffuse component of the phong model
+*/
+static glm::vec3 calculateDiffuse(PointLight pointlight, HitInfo hitInfo, Ray ray) {
+    // light attributes
+    glm::vec3 lightColor = pointlight.color;
+    glm::vec3 lightPos = pointlight.position;
 
-static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray)
-{
+    // intersection point
+    glm::vec3 hitPos = ray.origin + ray.t * ray.direction;
+
+    // calculate light direction
+    glm::vec3 lightDir = lightPos - hitPos;
+    lightDir = glm::normalize(lightDir);
+
+    // normalized normal
+    glm::vec3 normalizedNormal = glm::normalize(hitInfo.normal);
+
+    float dotProductNormailLightVector = glm::dot(normalizedNormal, lightDir);
+
+    // if light infront, find diffuse component
+    if (dotProductNormailLightVector > 0) {
+        glm::vec3 diffuse = hitInfo.material.kd * dotProductNormailLightVector;
+        return diffuse;
+    }
+
+    // else return black
+    return glm::vec3{ 0.0f };
+}
+
+/*
+* Calculates the specular term of the phong model using:
+*
+*           specular = ks * dot(N, H)^shininess
+*
+* where N is the normal and H is the reflection vector
+*
+* @param a point light, the hitInfo object and the ray
+* @return a vector of the specular component of the phong model
+*/
+static glm::vec3 calculateSpecular(PointLight pointlight, HitInfo hitInfo, Ray ray) {
+    // light attributes
+    glm::vec3 lightColor = pointlight.color;
+    glm::vec3 lightPos = pointlight.position;
+
+    // intersection point
+    glm::vec3 hitPos = ray.origin + ray.t * ray.direction;
+
+    // light dir
+    glm::vec3 lightDir = lightPos - hitPos;
+    lightDir = glm::normalize(lightDir);
+
+    //normal
+    glm::vec3 normalizedNormal = glm::normalize(hitInfo.normal);
+
+    // reflection vec
+    glm::vec3 H = 2 * glm::dot(lightDir, normalizedNormal) * normalizedNormal - lightDir;
+    H = glm::normalize(H);
+
+    //calculate specular
+    float shininess = hitInfo.material.shininess;
+    glm::vec3 ks = hitInfo.material.ks;
+    glm::vec3 specular = ks * glm::pow(glm::max(glm::dot(normalizedNormal, H), 0.0f), shininess);
+    return specular;
+}
+
+/*
+* Checks if the light ray has the same intersection point as the ray. If it does, then
+* that point is lit, else it is in shadow.
+
+* @param bvh, the ray and the light position
+* @return if the pixel is lit (true) or in shadow (false)
+*/
+static bool hitLightSuccess(const BoundingVolumeHierarchy& bvh, Ray ray, glm::vec3 lightPos) {
+    // create a temporary light ray
+    Ray tempLightRay;
+    tempLightRay.origin = lightPos;
+    glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+    tempLightRay.direction = glm::normalize(intersectionPointRay - tempLightRay.origin);
+
+    // intersect the light ray with the bvh
+    HitInfo hitInfo;
+    bvh.intersect(tempLightRay, hitInfo);
+
+    glm::vec3 intersectionPointLight = tempLightRay.origin + tempLightRay.t * tempLightRay.direction;
+    intersectionPointRay = ray.origin + ray.t * ray.direction;
+
+
+    float epsilon = (float) 1E-4;;
+    // if light intersection point and ray intersection point the same -> we can see the light -> lit
+    glm::vec3 differenceIntersection = intersectionPointLight - intersectionPointRay;
+    if (differenceIntersection.x < epsilon && 
+        differenceIntersection.y < epsilon && 
+        differenceIntersection.z < epsilon) {
+        return true;
+    }
+
+    // else there is darkness -> we can't see light from the pixel
+    return false;
+}
+
+/// <summary>
+/// Calculate the barycentric weights using the three vertices of the triangle and the intersection point.
+/// It is always already checked before calling this method whether the intersection point is actually in the triangle
+/// with bvh.intersect.
+/// </summary>
+/// <param name="v0">First vertex of triangle</param>
+/// <param name="v1">Second vertex of triangle</param>
+/// <param name="v2">Third vertex of triangle</param>
+/// <param name="p">Intersection point</param>
+/// <returns>A tuple with the three barycentric weights</returns>
+static std::tuple<float, float, float> getBarycentricWeights(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3& p) {
+    // Calculate the area of each sub-triangle
+    float A = glm::length(glm::cross(v1 - p, v2 - p)) / 2;
+    float B = glm::length(glm::cross(v0 - p, v2 - p)) / 2;
+    float C = glm::length(glm::cross(v0 - p, v1 - p)) / 2;
+
+    // Calculate the total area
+    float totalArea = glm::length(glm::cross(v2 - v0, v1 - v0)) / 2;
+
+    // Calculate the weights
+    float alpha = A / totalArea;
+    float beta = B / totalArea;
+    float gamma = C / totalArea;
+
+    // Check whether p is inside the triangle
+    return  { alpha, beta, gamma };
+}
+
+/// <summary>
+/// Calculate the interpolated normal given the information from the triangle
+/// and the ray.
+/// </summary>
+/// <param name="hitInfo">The info from the triangle where the ray hits</param>
+/// <param name="ray">The ray where you want to calculate the interpolated normal</param>
+static void drawInterpolatedNormal(HitInfo& hitInfo, Ray& ray) {
+    // Draw the normals from the vertices of the triangle
+    drawRay({ hitInfo.v0.position, hitInfo.v0.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
+    drawRay({ hitInfo.v1.position, hitInfo.v1.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
+    drawRay({ hitInfo.v2.position, hitInfo.v2.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
+
+    // Calculate the intersection point
+    glm::vec3 p = ray.origin + ray.t * ray.direction;
+
+    // Calculate the barycentric weights
+    std::tuple<float, float, float> weights = getBarycentricWeights(hitInfo.v0.position, hitInfo.v1.position, hitInfo.v2.position, p);
+    float alpha = get<0>(weights);
+    float beta = get<1>(weights);
+    float gamma = get<2>(weights);
+
+    // Calculate the interpolated normal by using the normals of the vertices and the barycentric weights
+    hitInfo.normal = alpha * hitInfo.v0.normal + beta * hitInfo.v1.normal + gamma * hitInfo.v2.normal;
+
+    // Draw the interpolated normal
+    drawRay({ p, hitInfo.normal, ray.t }, glm::vec3(0.0f, 0.0f, 1.0f));
+}
+
+static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray, int level, int maxLevel) {
     HitInfo hitInfo;
     if (bvh.intersect(ray, hitInfo)) {
-        // Draw a white debug ray if the ray hits.
-        drawRay(ray, glm::vec3(1.0f));
-        // Set the color of the pixel to white if the ray hits.
-        return glm::vec3(1.0f);
-    } else {
+        glm::vec3 finalColor{ 0.f };
+
+        if (debugNormalInterpolation) {
+            drawInterpolatedNormal(hitInfo, ray);
+        }
+        
+        if (debugTextures) {
+            // First get the ray from cameraview to the pixel
+            glm::vec3 p = ray.origin + ray.t * ray.direction;
+
+            // Calculate the barycentric weights
+            std::tuple<float, float, float> weights = getBarycentricWeights(hitInfo.v0.position, hitInfo.v1.position, hitInfo.v2.position, p);
+            float alpha = get<0>(weights);
+            float beta = get<1>(weights);
+            float gamma = get<2>(weights);
+
+            // Calculate the texture coordinates using the barycentric weights
+            glm::vec2 textureCoordinates = alpha * hitInfo.v0.texCoord + beta * hitInfo.v1.texCoord + gamma * hitInfo.v2.texCoord;
+
+            // The image used for the texture, uncomment the bricks one and you'll get the bricks pattern
+            Image image = Image("../../../data/bricks.jpg");
+            //Image image = Image("../../../data/default.png");
+
+            // Calculate the texel
+            return image.getTexel(textureCoordinates);
+        }
+        else {
+
+            // for all the lights in the scene
+            for (const auto& light : scene.lights) {
+
+                // POINT LIGHT
+                if (std::holds_alternative<PointLight>(light)) {
+                    const PointLight pointlight = std::get<PointLight>(light);
+
+                    // Hard shdow - if the point is in light, calculate color, else in shadow.
+                    if (hitLightSuccess(bvh, ray, pointlight.position)) {
+                        finalColor += pointlight.color * calculateDiffuse(pointlight, hitInfo, ray);
+                        finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
+                    }
+                    else {
+                        if (debugShadowRay) {
+                            // debug shadow ray: shadow ray occluded - hits something other than light -> red ray
+                            glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+
+                            Ray shadowRay;
+                            shadowRay.origin = intersectionPointRay;
+                            shadowRay.direction = -(intersectionPointRay - pointlight.position);
+                            HitInfo shadowRayInfo;
+                            bvh.intersect(shadowRay, shadowRayInfo);
+                            drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+                        }
+                    }
+
+                }
+                // SEGMENT LIGHT
+                else if (std::holds_alternative<SegmentLight>(light)) {
+                    const SegmentLight segmentlight = std::get<SegmentLight>(light);
+
+                    // divide segment lights into 20 samples
+                    int sampleSize = 20;
+                    float alpha = 0.05f;
+
+                    glm::vec3 lightZeroPos = segmentlight.endpoint0;
+                    glm::vec3 lightOnePos = segmentlight.endpoint1;
+                    glm::vec3 lightZeroColor = segmentlight.color0;
+                    glm::vec3 lightOneColor = segmentlight.color1;
+
+                    glm::vec3 x_step = (lightOnePos - lightZeroPos) / (float)sampleSize;
+
+                    for (int i = 0; i <= sampleSize; i++) {
+                        glm::vec3 currPos = lightZeroPos + (float)i * x_step;
+
+                        // linear interpolation
+                        glm::vec3 currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor);
+
+                        PointLight currPointLight = { currPos, currColor };
+
+                        // SOFT SHADOWS - treat each step light as point light
+                        if (hitLightSuccess(bvh, ray, currPointLight.position)) {
+                            finalColor += (currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray) * alpha);
+                            finalColor += (currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray) * alpha);
+
+                            // debug ray: segment lights
+                            // drawing all the sampled rays that hit the ligth with their color
+                            if (debugAreaLights) {
+                                Ray tempLightRay;
+                                tempLightRay.origin = currPos;
+                                glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+                                tempLightRay.direction = glm::normalize(intersectionPointRay - tempLightRay.origin);
+                                HitInfo hitInfo;
+                                bvh.intersect(tempLightRay, hitInfo);
+                                drawRay(tempLightRay, currColor);
+                            }
+                        }
+                        else {
+                            if (debugAreaLights) {
+                                // if the rays are not hitting the light, we make them red
+                                glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+
+                                Ray shadowRay;
+                                shadowRay.origin = intersectionPointRay;
+                                shadowRay.direction = -(intersectionPointRay - currPos);
+                                HitInfo shadowRayInfo;
+                                bvh.intersect(shadowRay, shadowRayInfo);
+                                drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+                            }
+                        }
+                    }
+
+                }
+                // PARALLELOGRAM LIGHT
+                else if (std::holds_alternative<ParallelogramLight>(light)) {
+                    const ParallelogramLight parallelogramlight = std::get<ParallelogramLight>(light);
+
+                    // divide parallelogram lights into 10 samples for x and y
+                    int sampleSize = 10;
+                    float alpha = 0.1f;
+
+                    glm::vec3 vertexZero = parallelogramlight.v0; // v0
+                    glm::vec3 vertexOne = vertexZero + parallelogramlight.edge01; // vo + v1
+                    glm::vec3 vertexTwo = vertexZero + parallelogramlight.edge02; // vo + v2
+
+                    glm::vec3 colorZero = parallelogramlight.color0;
+                    glm::vec3 colorOne = parallelogramlight.color1;
+                    glm::vec3 colorTwo = parallelogramlight.color2;
+                    glm::vec3 colorThree = parallelogramlight.color3;
+
+                    glm::vec3 x_step = (vertexOne - vertexZero) / (float)sampleSize;
+                    glm::vec3 y_step = (vertexTwo - vertexZero) / (float)sampleSize;
+
+                    // bilinear interpolation
+                    // f(0,0)(1-x)(1-y) + f(0,1)(1-x)y + f(1,0) x(1-y) + f(1,1)xy
+                    for (int i = 0; i <= sampleSize; i++) {
+                        for (int j = 0; j <= sampleSize; j++) {
+
+                            glm::vec3 currColor{ 0.f };
+                            currColor += (colorZero * (1 - i * alpha) * (1 - j * alpha));
+                            currColor += (colorTwo * (1 - i * alpha) * (j * alpha));
+                            currColor += (colorOne * (i * alpha) * (1 - j * alpha));
+                            currColor += (colorThree * (i * alpha) * (j * alpha));
+
+                            // before we average, we save the color to show in debug ray
+                            glm::vec3 debugRayColor = currColor;
+
+                            currColor *= (alpha * alpha);
+
+                            glm::vec3 currPos = vertexZero + ((float)i * x_step + (float)j * y_step);
+                            PointLight currPointLight = { currPos, currColor };
+
+                            if (hitLightSuccess(bvh, ray, currPointLight.position)) {
+                                finalColor += currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray);
+                                finalColor += currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray);
+
+
+                                // debug ray: parallelogram lights
+                                // drawing all the sampled rays that hit the ligth with their color
+                                if (debugAreaLights) {
+                                    Ray tempLightRay;
+                                    tempLightRay.origin = currPos;
+                                    glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+                                    tempLightRay.direction = glm::normalize(intersectionPointRay - tempLightRay.origin);
+                                    HitInfo hitInfo;
+                                    bvh.intersect(tempLightRay, hitInfo);
+                                    drawRay(tempLightRay, debugRayColor);
+                                }
+                            }
+                            else {
+                                // if the rays are not hitting the light, we make them red
+                                glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+
+                                if (debugAreaLights) {
+                                    Ray shadowRay;
+                                    shadowRay.origin = intersectionPointRay;
+                                    shadowRay.direction = -(intersectionPointRay - currPos);
+                                    HitInfo shadowRayInfo;
+                                    bvh.intersect(shadowRay, shadowRayInfo);
+                                    drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // drawing the camera ray using the final color
+            drawRay(ray, finalColor);
+
+            // everytime the ray intersects a specular surface, trace another ray in the mirror-reflection direction
+            float epsilon = (float)1E-6;
+            if (glm::length(hitInfo.material.ks) > epsilon && level < maxLevel) {
+
+                glm::vec3 hitNormal = glm::normalize(hitInfo.normal);
+                glm::vec3 reflectedVector = 2 * glm::dot(-ray.direction, hitNormal) * hitNormal + ray.direction;
+                reflectedVector = glm::normalize(reflectedVector);
+
+                glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
+                Ray reflectedRay = { intersectionPoint,  reflectedVector };
+
+                finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel));
+            }
+        }
+
+        return finalColor;
+    }
+    else {
         // Draw a red debug ray if the ray missed.
         drawRay(ray, glm::vec3(1.0f, 0.0f, 0.0f));
         // Set the color of the pixel to black if the ray misses.
         return glm::vec3(0.0f);
     }
+}
+
+static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray)
+{
+    int startLevel = 0;
+    int maxLevel = 6;
+    return recursive_ray_tracer(scene, bvh, ray, startLevel, maxLevel);
 
     // Lights are stored in a single array (scene.lights) where each item can be either a PointLight, SegmentLight or ParallelogramLight.
     // You can check whether a light at index i is a PointLight using std::holds_alternative:
@@ -142,8 +519,10 @@ int main(int argc, char** argv)
     Scene scene = loadScene(sceneType, dataPath);
     BoundingVolumeHierarchy bvh { &scene };
 
+    // debug buttons gui
     int bvhDebugLevel = 0;
     bool debugBVH { false };
+
     ViewMode viewMode { ViewMode::Rasterization };
 
     window.registerKeyCallback([&](int key, int /* scancode */, int action, int /* mods */) {
@@ -168,7 +547,8 @@ int main(int argc, char** argv)
         // === Setup the UI ===
         ImGui::Begin("Final Project");
         {
-            constexpr std::array items { "SingleTriangle", "Cube (segment light)", "Cornell Box (with mirror)", "Cornell Box (parallelogram light and mirror)", "Monkey", "Teapot", "Dragon", /* "AABBs",*/ "Spheres", /*"Mixed",*/ "Custom" };
+            constexpr std::array items { "SingleTriangle", "Cube (segment light)", "Cornell Box (with mirror)", 
+                "Cornell Box (parallelogram light and mirror)", "Monkey", "Teapot", "Dragon", /* "AABBs",*/ "Spheres", /*"Mixed",*/ "Custom", "Dragon2"};
             if (ImGui::Combo("Scenes", reinterpret_cast<int*>(&sceneType), items.data(), int(items.size()))) {
                 optDebugRay.reset();
                 scene = loadScene(sceneType, dataPath);
@@ -196,9 +576,11 @@ int main(int argc, char** argv)
                 // Perform a new render and measure the time it took to generate the image.
                 using clock = std::chrono::high_resolution_clock;
                 const auto start = clock::now();
+                std::cout << "Rendering in progress..." << std::endl;
                 renderRayTracing(scene, camera, bvh, screen);
                 const auto end = clock::now();
                 std::cout << "Time to render image: " << std::chrono::duration<float, std::milli>(end - start).count() << " milliseconds" << std::endl;
+
 
                 // Store the new image.
                 screen.writeBitmapToFile(outPath);
@@ -208,9 +590,17 @@ int main(int argc, char** argv)
         ImGui::Separator();
         ImGui::Text("Debugging");
         if (viewMode == ViewMode::Rasterization) {
+            ImGui::Checkbox("Draw Shadow Debug Ray", &debugShadowRay);
+            ImGui::Checkbox("Draw Area Lights", &debugAreaLights);
             ImGui::Checkbox("Draw BVH", &debugBVH);
+
             if (debugBVH)
                 ImGui::SliderInt("BVH Level", &bvhDebugLevel, 0, bvh.numLevels() - 1);
+
+            ImGui::Checkbox("Draw Intersected But Not Visited Modes", &debugIntersectionAABB);
+            ImGui::Checkbox("Draw Interpolated Normals", &debugNormalInterpolation);
+            ImGui::Checkbox("Add Texture", &debugTextures);
+
         }
 
         ImGui::Spacing();
