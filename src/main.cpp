@@ -158,7 +158,7 @@ static bool hitLightSuccess(const BoundingVolumeHierarchy& bvh, Ray ray, glm::ve
 /// <summary>
 /// Calculate the barycentric weights using the three vertices of the triangle and the intersection point.
 /// It is always already checked before calling this method whether the intersection point is actually in the triangle
-/// with bvh.intersect, so the if statement is not really necessary.
+/// with bvh.intersect.
 /// </summary>
 /// <param name="v0">First vertex of triangle</param>
 /// <param name="v1">Second vertex of triangle</param>
@@ -180,12 +180,7 @@ static std::tuple<float, float, float> getBarycentricWeights(glm::vec3 v0, glm::
     float gamma = C / totalArea;
 
     // Check whether p is inside the triangle
-    if (alpha + beta + gamma == 1) {
-        return  { alpha, beta, gamma };
-    }
-    else {
-        return { 0.0f,0.0f,0.0f };
-    }
+    return  { alpha, beta, gamma };
 }
 
 /// <summary>
@@ -220,11 +215,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
     HitInfo hitInfo;
     if (bvh.intersect(ray, hitInfo)) {
         glm::vec3 finalColor{ 0.f };
-
-        if (debugNormalInterpolation) {
-            drawInterpolatedNormal(hitInfo, ray);
-        }
-
+        
         if (debugTextures) {
             // First get the ray from cameraview to the pixel
             glm::vec3 p = ray.origin + ray.t * ray.direction;
@@ -239,8 +230,8 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
             glm::vec2 textureCoordinates = alpha * hitInfo.v0.texCoord + beta * hitInfo.v1.texCoord + gamma * hitInfo.v2.texCoord;
 
             // The image used for the texture, uncomment the bricks one and you'll get the bricks pattern
-            //Image image = Image("../../../data/bricks.jpg");
-            Image image = Image("../../../data/default.png");
+            Image image = Image("../../../data/bricks.jpg");
+            //Image image = Image("../../../data/default.png");
 
             // Calculate the texel
             return image.getTexel(textureCoordinates);
@@ -420,6 +411,10 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
 
                 finalColor = hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel));
             }
+        }
+
+        if (debugNormalInterpolation) {
+            drawInterpolatedNormal(hitInfo, ray);
         }
 
         return finalColor;
