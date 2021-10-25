@@ -22,7 +22,8 @@ enum SceneType {
     //AABBs,
     Spheres,
     //Mixed,
-    Custom
+    Custom,
+    Dragon2,
 };
 
 struct Plane {
