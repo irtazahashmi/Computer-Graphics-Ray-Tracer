@@ -40,6 +40,7 @@ bool debugShadowRay{ false };
 bool debugAreaLights = { false };
 bool debugIntersectionAABB{ false };
 bool debugNormalInterpolation{ false };
+bool debugTextures{ false };
 
 enum class ViewMode {
     Rasterization = 0,
@@ -154,170 +155,145 @@ static bool hitLightSuccess(const BoundingVolumeHierarchy& bvh, Ray ray, glm::ve
     return false;
 }
 
+/// <summary>
+/// Calculate the barycentric weights using the three vertices of the triangle and the intersection point.
+/// It is always already checked before calling this method whether the intersection point is actually in the triangle
+/// with bvh.intersect.
+/// </summary>
+/// <param name="v0">First vertex of triangle</param>
+/// <param name="v1">Second vertex of triangle</param>
+/// <param name="v2">Third vertex of triangle</param>
+/// <param name="p">Intersection point</param>
+/// <returns>A tuple with the three barycentric weights</returns>
+static std::tuple<float, float, float> getBarycentricWeights(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3& p) {
+    // Calculate the area of each sub-triangle
+    float A = glm::length(glm::cross(v1 - p, v2 - p)) / 2;
+    float B = glm::length(glm::cross(v0 - p, v2 - p)) / 2;
+    float C = glm::length(glm::cross(v0 - p, v1 - p)) / 2;
 
-static std::tuple<float, float, float> getBarycentricWeights(HitInfo& hitInfo, glm::vec3& p) {
-    float A = glm::length(glm::cross(hitInfo.v1.position - p, hitInfo.v2.position - p)) / 2;
-    float B = glm::length(glm::cross(hitInfo.v0.position - p, hitInfo.v2.position - p)) / 2;
-    float C = glm::length(glm::cross(hitInfo.v0.position - p, hitInfo.v1.position - p)) / 2;
-    float totalArea = glm::length(glm::cross(hitInfo.v2.position - hitInfo.v0.position, hitInfo.v1.position - hitInfo.v0.position)) / 2;
+    // Calculate the total area
+    float totalArea = glm::length(glm::cross(v2 - v0, v1 - v0)) / 2;
+
+    // Calculate the weights
     float alpha = A / totalArea;
     float beta = B / totalArea;
     float gamma = C / totalArea;
+
+    // Check whether p is inside the triangle
     return  { alpha, beta, gamma };
 }
 
+/// <summary>
+/// Calculate the interpolated normal given the information from the triangle
+/// and the ray.
+/// </summary>
+/// <param name="hitInfo">The info from the triangle where the ray hits</param>
+/// <param name="ray">The ray where you want to calculate the interpolated normal</param>
 static void drawInterpolatedNormal(HitInfo& hitInfo, Ray& ray) {
+    // Draw the normals from the vertices of the triangle
     drawRay({ hitInfo.v0.position, hitInfo.v0.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
     drawRay({ hitInfo.v1.position, hitInfo.v1.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
     drawRay({ hitInfo.v2.position, hitInfo.v2.normal, ray.t }, glm::vec3(0.0f, 1.0f, 0.0f));
 
+    // Calculate the intersection point
     glm::vec3 p = ray.origin + ray.t * ray.direction;
 
-    if (hitInfo.v0.normal != glm::vec3{ 0 }) {
-        auto [alpha, beta, gamma] = getBarycentricWeights(hitInfo, p);
-        hitInfo.normal = alpha * hitInfo.v0.normal + beta * hitInfo.v1.normal + gamma * hitInfo.v2.normal;
-        drawRay({ p, hitInfo.normal, ray.t }, glm::vec3(0.0f, 0.0f, 1.0f));
-    }
-}
+    // Calculate the barycentric weights
+    std::tuple<float, float, float> weights = getBarycentricWeights(hitInfo.v0.position, hitInfo.v1.position, hitInfo.v2.position, p);
+    float alpha = get<0>(weights);
+    float beta = get<1>(weights);
+    float gamma = get<2>(weights);
 
+    // Calculate the interpolated normal by using the normals of the vertices and the barycentric weights
+    hitInfo.normal = alpha * hitInfo.v0.normal + beta * hitInfo.v1.normal + gamma * hitInfo.v2.normal;
+
+    // Draw the interpolated normal
+    drawRay({ p, hitInfo.normal, ray.t }, glm::vec3(0.0f, 0.0f, 1.0f));
+}
 
 static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray, int level, int maxLevel) {
     HitInfo hitInfo;
     if (bvh.intersect(ray, hitInfo)) {
         glm::vec3 finalColor{ 0.f };
-
-        if (debugNormalInterpolation) {
-            drawInterpolatedNormal(hitInfo, ray);
-        }
         
-        // for all the lights in the scene
-        for (const auto& light : scene.lights) {
-            
-            // POINT LIGHT
-            if (std::holds_alternative<PointLight>(light)) {
-                const PointLight pointlight = std::get<PointLight>(light);
+        if (debugTextures) {
+            // First get the ray from cameraview to the pixel
+            glm::vec3 p = ray.origin + ray.t * ray.direction;
 
-                // Hard shdow - if the point is in light, calculate color, else in shadow.
-                if (hitLightSuccess(bvh, ray, pointlight.position)) {
-                    finalColor += pointlight.color * calculateDiffuse(pointlight, hitInfo, ray);
-                    finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
-                }
-                else {
-                    if (debugShadowRay) {
-                        // debug shadow ray: shadow ray occluded - hits something other than light -> red ray
-                        glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+            // Calculate the barycentric weights
+            std::tuple<float, float, float> weights = getBarycentricWeights(hitInfo.v0.position, hitInfo.v1.position, hitInfo.v2.position, p);
+            float alpha = get<0>(weights);
+            float beta = get<1>(weights);
+            float gamma = get<2>(weights);
 
-                        Ray shadowRay;
-                        shadowRay.origin = intersectionPointRay;
-                        shadowRay.direction = -(intersectionPointRay - pointlight.position);
-                        HitInfo shadowRayInfo;
-                        bvh.intersect(shadowRay, shadowRayInfo);
-                        drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
-                    }
-               }
-   
-            }
-            // SEGMENT LIGHT
-            else if (std::holds_alternative<SegmentLight>(light)) {
-                const SegmentLight segmentlight = std::get<SegmentLight>(light);
+            // Calculate the texture coordinates using the barycentric weights
+            glm::vec2 textureCoordinates = alpha * hitInfo.v0.texCoord + beta * hitInfo.v1.texCoord + gamma * hitInfo.v2.texCoord;
 
-                // divide segment lights into 20 samples
-                int sampleSize = 20;
-                float alpha = 0.05f;
-                
-                glm::vec3 lightZeroPos = segmentlight.endpoint0;
-                glm::vec3 lightOnePos = segmentlight.endpoint1;
-                glm::vec3 lightZeroColor = segmentlight.color0;
-                glm::vec3 lightOneColor = segmentlight.color1;
+            // The image used for the texture, uncomment the bricks one and you'll get the bricks pattern
+            Image image = Image("../../../data/bricks.jpg");
+            //Image image = Image("../../../data/default.png");
 
-                glm::vec3 x_step = (lightOnePos - lightZeroPos) / (float)sampleSize;
+            // Calculate the texel
+            return image.getTexel(textureCoordinates);
+        }
+        else {
 
-                for (int i = 0; i <= sampleSize; i++) {
-                    glm::vec3 currPos = lightZeroPos + (float) i * x_step;
+            // for all the lights in the scene
+            for (const auto& light : scene.lights) {
 
-                    // linear interpolation
-                    glm::vec3 currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor);
+                // POINT LIGHT
+                if (std::holds_alternative<PointLight>(light)) {
+                    const PointLight pointlight = std::get<PointLight>(light);
 
-                    PointLight currPointLight = { currPos, currColor };
-
-                    // SOFT SHADOWS - treat each step light as point light
-                    if (hitLightSuccess(bvh, ray, currPointLight.position)) {
-                        finalColor += (currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray) * alpha);
-                        finalColor += (currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray) * alpha);
-
-                        // debug ray: segment lights
-                        // drawing all the sampled rays that hit the ligth with their color
-                        if (debugAreaLights) {
-                            Ray tempLightRay;
-                            tempLightRay.origin = currPos;
-                            glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
-                            tempLightRay.direction = glm::normalize(intersectionPointRay - tempLightRay.origin);
-                            HitInfo hitInfo;
-                            bvh.intersect(tempLightRay, hitInfo);
-                            drawRay(tempLightRay, currColor);
-                        }
+                    // Hard shdow - if the point is in light, calculate color, else in shadow.
+                    if (hitLightSuccess(bvh, ray, pointlight.position)) {
+                        finalColor += pointlight.color * calculateDiffuse(pointlight, hitInfo, ray);
+                        finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
                     }
                     else {
-                        if (debugAreaLights) {
-                            // if the rays are not hitting the light, we make them red
+                        if (debugShadowRay) {
+                            // debug shadow ray: shadow ray occluded - hits something other than light -> red ray
                             glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
 
                             Ray shadowRay;
                             shadowRay.origin = intersectionPointRay;
-                            shadowRay.direction = -(intersectionPointRay - currPos);
+                            shadowRay.direction = -(intersectionPointRay - pointlight.position);
                             HitInfo shadowRayInfo;
                             bvh.intersect(shadowRay, shadowRayInfo);
                             drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
                         }
                     }
+
                 }
+                // SEGMENT LIGHT
+                else if (std::holds_alternative<SegmentLight>(light)) {
+                    const SegmentLight segmentlight = std::get<SegmentLight>(light);
 
-            }
-            // PARALLELOGRAM LIGHT
-            else if (std::holds_alternative<ParallelogramLight>(light)) {
-                const ParallelogramLight parallelogramlight = std::get<ParallelogramLight>(light);
+                    // divide segment lights into 20 samples
+                    int sampleSize = 20;
+                    float alpha = 0.05f;
 
-                // divide parallelogram lights into 10 samples for x and y
-                int sampleSize = 10;
-                float alpha = 0.1f;
+                    glm::vec3 lightZeroPos = segmentlight.endpoint0;
+                    glm::vec3 lightOnePos = segmentlight.endpoint1;
+                    glm::vec3 lightZeroColor = segmentlight.color0;
+                    glm::vec3 lightOneColor = segmentlight.color1;
 
-                glm::vec3 vertexZero = parallelogramlight.v0; // v0
-                glm::vec3 vertexOne = vertexZero + parallelogramlight.edge01; // vo + v1
-                glm::vec3 vertexTwo = vertexZero + parallelogramlight.edge02; // vo + v2
+                    glm::vec3 x_step = (lightOnePos - lightZeroPos) / (float)sampleSize;
 
-                glm::vec3 colorZero = parallelogramlight.color0;
-                glm::vec3 colorOne = parallelogramlight.color1;
-                glm::vec3 colorTwo = parallelogramlight.color2;
-                glm::vec3 colorThree = parallelogramlight.color3;
+                    for (int i = 0; i <= sampleSize; i++) {
+                        glm::vec3 currPos = lightZeroPos + (float)i * x_step;
 
-                glm::vec3 x_step = (vertexOne - vertexZero) / (float)sampleSize;
-                glm::vec3 y_step = (vertexTwo - vertexZero) / (float)sampleSize;
+                        // linear interpolation
+                        glm::vec3 currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor);
 
-                // bilinear interpolation
-                // f(0,0)(1-x)(1-y) + f(0,1)(1-x)y + f(1,0) x(1-y) + f(1,1)xy
-                for (int i = 0; i <= sampleSize; i++) {
-                    for (int j = 0; j <= sampleSize; j++) {
-
-                        glm::vec3 currColor{ 0.f };
-                        currColor += (colorZero * (1 - i * alpha) * (1 - j * alpha));
-                        currColor += (colorTwo * (1 - i * alpha) * (j * alpha));
-                        currColor += (colorOne * (i * alpha) * (1 - j * alpha));
-                        currColor += (colorThree * (i * alpha) * (j * alpha));
-                        
-                        // before we averrage, we save the color to show in debug ray
-                        glm::vec3 debugRayColor = currColor;
-
-                        currColor *= (alpha * alpha);
-
-                        glm::vec3 currPos = vertexZero + ((float) i * x_step + (float) j * y_step);
                         PointLight currPointLight = { currPos, currColor };
 
+                        // SOFT SHADOWS - treat each step light as point light
                         if (hitLightSuccess(bvh, ray, currPointLight.position)) {
-                            finalColor += currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray);
-                            finalColor += currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray);
-     
+                            finalColor += (currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray) * alpha);
+                            finalColor += (currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray) * alpha);
 
-                            // debug ray: parallelogram lights
+                            // debug ray: segment lights
                             // drawing all the sampled rays that hit the ligth with their color
                             if (debugAreaLights) {
                                 Ray tempLightRay;
@@ -326,14 +302,14 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                                 tempLightRay.direction = glm::normalize(intersectionPointRay - tempLightRay.origin);
                                 HitInfo hitInfo;
                                 bvh.intersect(tempLightRay, hitInfo);
-                                drawRay(tempLightRay, debugRayColor);
+                                drawRay(tempLightRay, currColor);
                             }
                         }
                         else {
-                            // if the rays are not hitting the light, we make them red
-                            glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
-
                             if (debugAreaLights) {
+                                // if the rays are not hitting the light, we make them red
+                                glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+
                                 Ray shadowRay;
                                 shadowRay.origin = intersectionPointRay;
                                 shadowRay.direction = -(intersectionPointRay - currPos);
@@ -341,27 +317,104 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                                 bvh.intersect(shadowRay, shadowRayInfo);
                                 drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
                             }
-                        }       
+                        }
+                    }
+
+                }
+                // PARALLELOGRAM LIGHT
+                else if (std::holds_alternative<ParallelogramLight>(light)) {
+                    const ParallelogramLight parallelogramlight = std::get<ParallelogramLight>(light);
+
+                    // divide parallelogram lights into 10 samples for x and y
+                    int sampleSize = 10;
+                    float alpha = 0.1f;
+
+                    glm::vec3 vertexZero = parallelogramlight.v0; // v0
+                    glm::vec3 vertexOne = vertexZero + parallelogramlight.edge01; // vo + v1
+                    glm::vec3 vertexTwo = vertexZero + parallelogramlight.edge02; // vo + v2
+
+                    glm::vec3 colorZero = parallelogramlight.color0;
+                    glm::vec3 colorOne = parallelogramlight.color1;
+                    glm::vec3 colorTwo = parallelogramlight.color2;
+                    glm::vec3 colorThree = parallelogramlight.color3;
+
+                    glm::vec3 x_step = (vertexOne - vertexZero) / (float)sampleSize;
+                    glm::vec3 y_step = (vertexTwo - vertexZero) / (float)sampleSize;
+
+                    // bilinear interpolation
+                    // f(0,0)(1-x)(1-y) + f(0,1)(1-x)y + f(1,0) x(1-y) + f(1,1)xy
+                    for (int i = 0; i <= sampleSize; i++) {
+                        for (int j = 0; j <= sampleSize; j++) {
+
+                            glm::vec3 currColor{ 0.f };
+                            currColor += (colorZero * (1 - i * alpha) * (1 - j * alpha));
+                            currColor += (colorTwo * (1 - i * alpha) * (j * alpha));
+                            currColor += (colorOne * (i * alpha) * (1 - j * alpha));
+                            currColor += (colorThree * (i * alpha) * (j * alpha));
+
+                            // before we average, we save the color to show in debug ray
+                            glm::vec3 debugRayColor = currColor;
+
+                            currColor *= (alpha * alpha);
+
+                            glm::vec3 currPos = vertexZero + ((float)i * x_step + (float)j * y_step);
+                            PointLight currPointLight = { currPos, currColor };
+
+                            if (hitLightSuccess(bvh, ray, currPointLight.position)) {
+                                finalColor += currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray);
+                                finalColor += currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray);
+
+
+                                // debug ray: parallelogram lights
+                                // drawing all the sampled rays that hit the ligth with their color
+                                if (debugAreaLights) {
+                                    Ray tempLightRay;
+                                    tempLightRay.origin = currPos;
+                                    glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+                                    tempLightRay.direction = glm::normalize(intersectionPointRay - tempLightRay.origin);
+                                    HitInfo hitInfo;
+                                    bvh.intersect(tempLightRay, hitInfo);
+                                    drawRay(tempLightRay, debugRayColor);
+                                }
+                            }
+                            else {
+                                // if the rays are not hitting the light, we make them red
+                                glm::vec3 intersectionPointRay = ray.origin + ray.t * ray.direction;
+
+                                if (debugAreaLights) {
+                                    Ray shadowRay;
+                                    shadowRay.origin = intersectionPointRay;
+                                    shadowRay.direction = -(intersectionPointRay - currPos);
+                                    HitInfo shadowRayInfo;
+                                    bvh.intersect(shadowRay, shadowRayInfo);
+                                    drawRay(shadowRay, glm::vec3(1.0f, 0.0f, 0.0f));
+                                }
+                            }
+                        }
                     }
                 }
             }
+
+            // drawing the camera ray using the final color
+            drawRay(ray, finalColor);
+
+            // everytime the ray intersects a specular surface, trace another ray in the mirror-reflection direction
+            float epsilon = (float)1E-6;
+            if (glm::length(hitInfo.material.ks) > epsilon && level < maxLevel) {
+
+                glm::vec3 hitNormal = glm::normalize(hitInfo.normal);
+                glm::vec3 reflectedVector = 2 * glm::dot(-ray.direction, hitNormal) * hitNormal + ray.direction;
+                reflectedVector = glm::normalize(reflectedVector);
+
+                glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
+                Ray reflectedRay = { intersectionPoint,  reflectedVector };
+
+                finalColor = hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel));
+            }
         }
 
-        // drawing the camera ray using the final color
-        drawRay(ray, finalColor);
-        
-        // everytime the ray intersects a specular surface, trace another ray in the mirror-reflection direction
-        float epsilon = (float) 1E-6;
-        if (glm::length(hitInfo.material.ks) > epsilon && level < maxLevel) {
-
-            glm::vec3 hitNormal = glm::normalize(hitInfo.normal);
-            glm::vec3 reflectedVector = 2 * glm::dot(-ray.direction, hitNormal) * hitNormal + ray.direction;
-            reflectedVector = glm::normalize(reflectedVector);
-
-            glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
-            Ray reflectedRay = { intersectionPoint,  reflectedVector };
-
-            finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel));
+        if (debugNormalInterpolation) {
+            drawInterpolatedNormal(hitInfo, ray);
         }
 
         return finalColor;
@@ -546,6 +599,7 @@ int main(int argc, char** argv)
 
             ImGui::Checkbox("Draw Intersected But Not Visited Modes", &debugIntersectionAABB);
             ImGui::Checkbox("Draw Interpolated Normals", &debugNormalInterpolation);
+            ImGui::Checkbox("Add Texture", &debugTextures);
 
         }
 

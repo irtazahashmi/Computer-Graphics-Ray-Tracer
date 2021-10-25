@@ -46,6 +46,7 @@ glm::vec3 Image::getTexel(const glm::vec2& textureCoordinates) const
     return glm::vec3(0.0f);
 #else
     const glm::ivec2 pixel = glm::ivec2(textureCoordinates * glm::vec2(m_width, m_height) + 0.5f);
-    return m_pixels[pixel.y * m_width + pixel.x];
+    float index = pixel.y * m_width + pixel.x;
+    return m_pixels[index];
 #endif
 }
