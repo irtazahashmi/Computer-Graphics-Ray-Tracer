@@ -469,6 +469,36 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
     // loadScene function in scene.cpp). Custom lights will not be visible in rasterization view.
 }
 
+// box Filter which averages the pixel based on its neighbouring pixels
+glm::vec3 boxFilter(Screen& source, int i, int j, int filterSize) {
+    // filterSize cannot be smaller than 1
+    filterSize = glm::max(1, filterSize);
+    glm::vec3 sum{ 0.0f };
+
+    // sum and average the surrounding pixels based on the filterSize
+    for (int x = -filterSize; x < filterSize + 1; ++x) {
+        for (int y = -filterSize; y < filterSize + 1; ++y) {
+            sum += source.getPixel(i + x, j + y);
+        }
+    }
+    sum /= (2 * filterSize + 1) * (2 * filterSize + 1);
+    
+    // return new averaged pixel
+    return sum;
+}
+
+// filter that goes through all the pixels in the screen, based on the filterSize
+Screen GeneralFilter(Screen& source, int filterSize) {
+    Screen result(windowResolution);
+    for (int i = filterSize; i < windowResolution.x - filterSize; ++i) {
+        for (int j = filterSize; j < windowResolution.y - filterSize; ++j) {
+            // call boxFilter for new colour of the pixel
+            result.setPixel(i, j, boxFilter(source, i, j, filterSize));
+        }
+    }
+    return result;
+}
+
 static void setOpenGLMatrices(const Trackball& camera);
 static void drawLightsOpenGL(const Scene& scene, const Trackball& camera, int selectedLight);
 static void drawSceneOpenGL(const Scene& scene);
@@ -521,6 +551,10 @@ static void renderRayTracing(const Scene& scene, const Trackball& camera, const 
         }
     });
     if (debugBloomFilter) {
+        // box filter
+        threshold = GeneralFilter(threshold, 10);
+
+        // add the new pixels to the original
         tbb::parallel_for(windowRange, [&](tbb::blocked_range2d<int, int> localRange) {
             for (int y = std::begin(localRange.rows()); y != std::end(localRange.rows()); y++) {
                 for (int x = std::begin(localRange.cols()); x != std::end(localRange.cols()); x++) {
@@ -529,15 +563,15 @@ static void renderRayTracing(const Scene& scene, const Trackball& camera, const 
                         float(x) / windowResolution.x * 2.0f - 1.0f,
                         float(y) / windowResolution.y * 2.0f - 1.0f
                     };
-                    screen.setPixel(x, y, threshold.getPixel(x, y));
+                    glm::vec3 newColour = screen.getPixel(x, y) + 1.0f * threshold.getPixel(x, y);
+                    screen.setPixel(x, y, newColour);
                 }
             }
         });
     }
-    // only keep large values
-    // do box filter
-    // scale
-    // add to orginial
+    // TODO
+    // slider for threshold
+    // slider for filterSize
 
 #endif
 }
