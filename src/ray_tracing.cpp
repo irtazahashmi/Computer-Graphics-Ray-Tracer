@@ -12,9 +12,9 @@ DISABLE_WARNINGS_POP()
 
 /*
 * Checks whether a given point is inside a given triangle.
-* 
+*
 * This is done by finding whether the point p lies inside all three edges of the triangle.
-* 
+*
 * @param 3 vectors, indicating the 3 vartices of the triangle, 1 vector indicating the point we want to check
 *           and the normal of the triangle
 * @return boolean value, true if the point is inside the triangle, false otherwise
@@ -37,7 +37,8 @@ bool pointInTriangle(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& 
     float insideEdgeThree = glm::dot(n, glm::cross(triangleEdgeThree, trianglePointThree));
 
     // point p inside the trianlge conditions
-    double epsilon = (double) 1E-10;
+    // small epsilon for precision
+    double epsilon = (double)1E-10;
     if (insideEdgeOne > epsilon && insideEdgeTwo > epsilon && insideEdgeThree > epsilon) {
         // point p inside triangle
         return true;
@@ -49,9 +50,9 @@ bool pointInTriangle(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& 
 
 /*
 * Checks whether the ray hits the given plane, and change the ray.t value (if needed)
-* 
+*
 * The following was implemented using the equation that was given during the lecture
-* 
+*
 * @param plane, and the ray
 * @return boolean value, true if the ray hits the plane , false otherwise
 */
@@ -76,7 +77,7 @@ bool intersectRayWithPlane(const Plane& plane, Ray& ray)
     float denominator = glm::dot(d, n);
 
     // if abs(denominator) < epsilon, ray is parrallel is to plane -> no intersection
-    double epsilon = (double) 1E-10;
+    float epsilon = (float)1E-6;
     if (glm::abs(denominator) < epsilon) {
         return false;
     }
@@ -85,7 +86,8 @@ bool intersectRayWithPlane(const Plane& plane, Ray& ray)
     float t = numerator / denominator;
 
     // if intersection
-    if (t > epsilon) {
+    float intersect_epsilon = (float)1E-4;
+    if (t > intersect_epsilon) {
         // if the intersection is closer than a previous intersection, update t and return true
         if (t < ray.t) {
             ray.t = t;
@@ -99,9 +101,9 @@ bool intersectRayWithPlane(const Plane& plane, Ray& ray)
 
 /*
 * Returns a plane from the given 3  points
-* 
+*
 * The following method useses the formulae that were given during the lecture
-* 
+*
 * @param 3 vectors, indicating the 3 points (vertices) of the triangle
 * @return plane with all the neccesary information generated
 */
@@ -129,12 +131,12 @@ Plane trianglePlane(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v
 
 /*
 * It checks whether the ray intersects with triangle , and if needed updates the ray.t value
-* 
+*
 * First we calculate the intersection between the ray and plane created by the triangle (if any),
-* and then we check if that point lies inside the triangle. 
-* 
+* and then we check if that point lies inside the triangle.
+*
 * All the calculations use formulae that were given during the lecture
-* 
+*
 * @param 3 vectors representing the 3 vertices of the triangle, the ray, and the HitInfo
 * @return boolean variable , true if there is an intersection of the ray and triangle false otherwise
 */
@@ -187,19 +189,19 @@ bool intersectRayWithTriangle(const glm::vec3& v0, const glm::vec3& v1, const gl
 
 /*
 * Checks whether the given ray intersects with a sphere. Also updates if needed the ray.t value
-* 
-* We calculate a, b c, using formulae given in the lecture. Then we reduce the equation in 
+*
+* We calculate a, b c, using formulae given in the lecture. Then we reduce the equation in
 * the form of (math done by hand):
-* 
+*
 *   a*t^2 + b*t + c =0
-* 
+*
 * Next we find (if any) the value(s) of the t. And then we check if its not behind the ray
-* and update if needed the ray.t value. 
-* 
+* and update if needed the ray.t value.
+*
 * @param the sphere, the ray , and hit info
-* 
+*
 * @return If any value(s) exist(s) we return true, otherwise false
-* 
+*
 */
 bool intersectRayWithShape(const Sphere& sphere, Ray& ray, HitInfo& hitInfo)
 {
