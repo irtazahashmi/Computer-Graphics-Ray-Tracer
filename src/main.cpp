@@ -472,7 +472,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                 Ray reflectedRay = { intersectionPoint,  reflectedVector };
 
                 HitInfo hitInfo1;
-                finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel,hitInfo1));
+                finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel, hitInfo1));
             }
             if (debugTransparency) {
                 float transparency = hitInfo.material.transparency;
@@ -481,7 +481,8 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                     glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
                     Ray secondRay = { intersectionPoint, ray.direction };
 
-                    glm::vec3 backgroundColor = recursive_ray_tracer(scene, bvh, secondRay, level + 1, maxLevel);
+                    HitInfo hitInfo1;
+                    glm::vec3 backgroundColor = recursive_ray_tracer(scene, bvh, secondRay, level + 1, maxLevel, hitInfo1);
                     glm::vec3 oldFinalColor = finalColor;
                     finalColor = transparency * oldFinalColor + background * backgroundColor;
                 }
