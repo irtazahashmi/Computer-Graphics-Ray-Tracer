@@ -65,6 +65,12 @@ Scene loadScene(SceneType type, const std::filesystem::path& dataDir)
         std::move(std::begin(subMeshes), std::end(subMeshes), std::back_inserter(scene.meshes));
         scene.lights.push_back(PointLight { glm::vec3(-1, 1, -1), glm::vec3(1) });
     } break;
+    case Dragon2: {
+        // Load a 3D model of a Dragon
+        auto subMeshes = loadMesh(dataDir / "alduin-dragon.obj", true);
+        std::move(std::begin(subMeshes), std::end(subMeshes), std::back_inserter(scene.meshes));
+        scene.lights.push_back(PointLight{ glm::vec3(-1, 1, -1), glm::vec3(1) });
+    } break;
     /*case AABBs: {
         //scene.boxes.push_back(AxisAlignedBox { glm::vec3(-2.0f, -2.0f, 5.0f), glm::vec3(-1.0f, -1.0f, 6.0f) });
         //scene.boxes.push_back(AxisAlignedBox { glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(1.5f, 1.5f, 7.0f) });
