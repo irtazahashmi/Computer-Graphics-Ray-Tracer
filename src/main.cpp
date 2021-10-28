@@ -44,8 +44,12 @@ bool debugTextures{ false };
 bool debugBloomFilter{ false };
 float debugBloomfilterThreshold = 0;
 int debugBloomfilterSize = 0;
+bool debugMipmapping{ false };
 bool debugTransparency{ false };
 bool drawTrianglesInLeaf{ false };
+
+int mipmappingLevel = 0;
+int mipmappingReduceResolution = 0;
 
 enum class ViewMode {
     Rasterization = 0,
@@ -270,8 +274,8 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
             glm::vec2 textureCoordinates = alpha * hitInfo.v0.texCoord + beta * hitInfo.v1.texCoord + gamma * hitInfo.v2.texCoord;
 
             // The image used for the texture, uncomment the bricks one and you'll get the bricks pattern
-            Image image = Image("../../../data/bricks.jpg");
-            //Image image = Image("../../../data/default.png");
+            //Image image = Image("../../../data/bricks.jpg");
+            Image image = Image("../../../data/default.png");
 
             // Calculate the texel
             return image.getTexel(textureCoordinates);
@@ -286,7 +290,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                     const PointLight pointlight = std::get<PointLight>(light);
 
                     // Hard shdow - if the point is in light, calculate color, else in shadow.
-                    if (hitLightSuccess(bvh, ray, pointlight.position) || debugTransparency) {
+                    if (hitLightSuccess(bvh, ray, pointlight.position)) {
                         finalColor += pointlight.color * calculateDiffuse(pointlight, hitInfo, ray);
                         finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
                     }
@@ -466,7 +470,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
 
             // everytime the ray intersects a specular surface, trace another ray in the mirror-reflection direction
             float epsilon = (float)1E-6;
-            if (glm::length(hitInfo.material.ks) > epsilon && level < maxLevel) {
+            if ((glm::length(hitInfo.material.ks) > epsilon || debugTransparency) && level < maxLevel) {
 
                 glm::vec3 hitNormal = glm::normalize(hitInfo.normal);
                 glm::vec3 reflectedVector = 2 * glm::dot(-ray.direction, hitNormal) * hitNormal + ray.direction;
@@ -541,24 +545,61 @@ glm::vec3 boxFilter(Screen& source, int i, int j, int filterSize) {
     return sum;
 }
 
-// filter that goes through all the pixels in the screen, based on the filterSize
-Screen GeneralFilter(Screen& source, int filterSize) {
-    Screen result(windowResolution);
-    for (int i = filterSize; i < windowResolution.x - filterSize; ++i) {
-        for (int j = filterSize; j < windowResolution.y - filterSize; ++j) {
-            // call boxFilter for new colour of the pixel
-            result.setPixel(i, j, boxFilter(source, i, j, filterSize));
+glm::vec3 mipmapping(Screen& source, int i, int j, int filterSize) {
+    // filterSize cannot be smaller than 1
+    filterSize = glm::max(1, filterSize);
+    glm::vec3 sum{ 0.0f };
+
+    // sum and average the surrounding pixels based on the filterSize
+    for (int x = 0; x < filterSize; ++x) {
+        for (int y = 0; y < filterSize; ++y) {
+            sum += source.getPixel(i + x, j + y);
         }
     }
-    return result;
+    sum /= filterSize * filterSize;
+
+    // return new averaged pixel
+    return sum;
 }
+
+// filter that goes through all the pixels in the screen, based on the filterSize
+Screen GeneralFilter(Screen& source, int filterSize) {
+    if (debugBloomFilter) {
+        Screen result(windowResolution);
+        for (int i = filterSize; i < windowResolution.x - filterSize; ++i) {
+            for (int j = filterSize; j < windowResolution.y - filterSize; ++j) {
+                // call boxFilter for new colour of the pixel
+                result.setPixel(i, j, boxFilter(source, i, j, filterSize));
+            }
+        }
+        return result;
+    }
+    if (debugMipmapping) {
+        // the window size will be smaller when using mipmapping
+        // this is only possible if the current windowResolution is big enough
+        if (source.getResolution().x > filterSize && source.getResolution().y > filterSize) {
+            Screen result(source.getResolution() / filterSize);
+            for (int i = 0; i < source.getResolution().x - filterSize; i = i + filterSize) {
+                for (int j = 0; j < source.getResolution().y - filterSize; j = j + filterSize) {
+                    // call mipmapping for new colour of the pixel
+                    result.setPixel(i / filterSize, j / filterSize, mipmapping(source, i, j, filterSize));
+                }
+            }
+            return result;
+        }
+        else {
+            return source;
+        }        
+    }
+}
+
 
 static void setOpenGLMatrices(const Trackball& camera);
 static void drawLightsOpenGL(const Scene& scene, const Trackball& camera, int selectedLight);
 static void drawSceneOpenGL(const Scene& scene);
 
 // This is the main rendering function. You are free to change this function in any way (including the function signature).
-static void renderRayTracing(const Scene& scene, const Trackball& camera, const BoundingVolumeHierarchy& bvh, Screen& screen)
+static Screen renderRayTracing(const Scene& scene, const Trackball& camera, const BoundingVolumeHierarchy& bvh, Screen& screen)
 {
 #ifndef NDEBUG
     // Single threaded in debug mode
@@ -623,10 +664,20 @@ static void renderRayTracing(const Scene& scene, const Trackball& camera, const 
             }
         });
     }
+    if (debugMipmapping) {
+        Screen mipmap = screen;
+        int level = mipmappingLevel;
+        int reduceResolution = mipmappingReduceResolution;
+        for (int i = 0; i < level; i++) {
+            mipmap = GeneralFilter(mipmap, reduceResolution);
+        }
+        return mipmap;
+
+    }
     // TODO
     // slider for threshold
     // slider for filterSize
-
+    return screen;
 #endif
 }
 
@@ -704,13 +755,13 @@ int main(int argc, char** argv)
                 using clock = std::chrono::high_resolution_clock;
                 const auto start = clock::now();
                 std::cout << "Rendering in progress..." << std::endl;
-                renderRayTracing(scene, camera, bvh, screen);
+                Screen output = renderRayTracing(scene, camera, bvh, screen);
                 const auto end = clock::now();
                 std::cout << "Time to render image: " << std::chrono::duration<float, std::milli>(end - start).count() << " milliseconds" << std::endl;
 
 
                 // Store the new image.
-                screen.writeBitmapToFile(outPath);
+                output.writeBitmapToFile(outPath);
             }
         }
         ImGui::Spacing();
@@ -729,6 +780,11 @@ int main(int argc, char** argv)
             ImGui::Checkbox("Draw Intersected But Not Visited Modes", &debugIntersectionAABB);
             ImGui::Checkbox("Draw Interpolated Normals", &debugNormalInterpolation);
             ImGui::Checkbox("Add Texture", &debugTextures);
+            ImGui::Checkbox("Mipmapping", &debugMipmapping);
+            if (debugMipmapping) {
+                ImGui::SliderInt("Level", &mipmappingLevel, 0, 10);
+                ImGui::SliderInt("Reduce resolution by X times X", &mipmappingReduceResolution, 2, 10);
+            }
             ImGui::Checkbox("Bloom Filter", &debugBloomFilter);
             ImGui::Checkbox("Transparency", &debugTransparency);
 

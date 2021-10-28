@@ -24,6 +24,10 @@ Screen::Screen(const glm::ivec2& resolution)
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+glm::ivec2 Screen::getResolution(){
+    return m_resolution;
+}
+
 void Screen::clear(const glm::vec3& color)
 {
     std::fill(std::begin(m_textureData), std::end(m_textureData), color);
