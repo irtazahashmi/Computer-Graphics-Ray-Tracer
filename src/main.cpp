@@ -402,6 +402,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                             float new_alpha_x = (float)(i + e) * alpha;
                             float new_alpha_y = (float)(j + e) * alpha;
 
+                            // https://blogs.sas.com/content/iml/2020/05/18/what-is-bilinear-interpolation.html#:~:text=Bilinear%20interpolation%20is%20a%20weighted,four%20corners%20of%20the%20rectangle.&text=Given%20a%20rectangle%20with%20lower,y0)%2F(y1%2Dy0)
                             //using bileaner interpolation and our new data we calclulate the new values for the colour of the sample light
                             glm::vec3 currColor{ 0.f };
                             currColor += (colorZero * (1 - new_alpha_x) * (1 - new_alpha_y));
