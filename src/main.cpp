@@ -35,7 +35,7 @@ DISABLE_WARNINGS_POP()
 constexpr glm::ivec2 windowResolution { 800, 800 }; // window resolution
 const std::filesystem::path dataPath { DATA_DIR };
 
-// if checked box in gui, will display debug rays for interpolated normals
+// Declare of some global boolean variables which will be needed for viual debug
 bool debugShadowRay{ false };
 bool debugAreaLights = { false };
 bool debugIntersectionAABB{ false };
@@ -43,6 +43,8 @@ bool debugNormalInterpolation{ false };
 bool debugTextures{ false };
 bool debugBloomFilter{ false };
 bool debugMipmapping{ false };
+bool debugTransparency{ false };
+bool drawTrianglesInLeaf{ false };
 
 int mipmappingLevel = 0;
 int mipmappingReduceResolution = 0;
@@ -216,8 +218,39 @@ static void drawInterpolatedNormal(HitInfo& hitInfo, Ray& ray) {
     drawRay({ p, hitInfo.normal, ray.t }, glm::vec3(0.0f, 0.0f, 1.0f));
 }
 
-static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray, int level, int maxLevel) {
-    HitInfo hitInfo;
+/// <summary>
+/// Function that takes a hitbox as parameter and draws out the triangle
+/// We use this function to draw the final triangle as was asked for the visual debug
+/// of the bvh generation
+/// </summary>
+/// <param name="hitInfo"> Contains info for the triangle (we  may only use the vertices positions and the material)</param>
+static void drawDebugTriangle(HitInfo& hitInfo) {
+    glBegin(GL_TRIANGLES);
+
+    glColor3f(1, 1, 1);
+    glNormal3f(hitInfo.normal.x, hitInfo.normal.y, hitInfo.normal.z);
+
+    glVertex3f(hitInfo.v0.position.x, hitInfo.v0.position.y, hitInfo.v0.position.z);
+    glVertex3f(hitInfo.v1.position.x, hitInfo.v1.position.y, hitInfo.v1.position.z);
+    glVertex3f(hitInfo.v2.position.x, hitInfo.v2.position.y, hitInfo.v2.position.z);
+
+    glEnd();
+}
+
+/// <summary>
+/// We check all the light sources of our scene, around the endpoint of the ray. By using the 
+/// Phong shading model and applying if needed any external textures we can calculate the final of the endpoint of our ray.
+/// If needed (i.e. specular material) we call this funcion recursively which its partial result will contribute to the specular component 
+/// of the initial point(pixel)
+/// </summary>
+/// <param name="scene"> Our scene which contains all the meshes</param>
+/// <param name="bvh"> BVH used when we ray-tracing the image to calculate if the ray intersects with the scene</param>
+/// <param name="ray"> The ray that points at the point in 3d space which we want to calclulate the color for</param>
+/// <param name="level"> The current level of the recursive step (0) if its the first </param>
+/// <param name="maxLevel"> The maximum level of recursive steps we want to have per pixel</param>
+/// <param name="hitInfo"> Stores info about the triangle that we intersect, such as its vertices, its normal and its material</param>
+/// <returns></returns>
+static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray, int level, int maxLevel, HitInfo& hitInfo) {
     if (bvh.intersect(ray, hitInfo)) {
         glm::vec3 finalColor{ 0.f };
 
@@ -255,7 +288,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                     const PointLight pointlight = std::get<PointLight>(light);
 
                     // Hard shdow - if the point is in light, calculate color, else in shadow.
-                    if (hitLightSuccess(bvh, ray, pointlight.position)) {
+                    if (hitLightSuccess(bvh, ray, pointlight.position) || debugTransparency) {
                         finalColor += pointlight.color * calculateDiffuse(pointlight, hitInfo, ray);
                         finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
                     }
@@ -287,14 +320,22 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                     glm::vec3 lightZeroColor = segmentlight.color0;
                     glm::vec3 lightOneColor = segmentlight.color1;
 
+                    //Split the segment to equals steps
                     glm::vec3 x_step = (lightOnePos - lightZeroPos) / (float)sampleSize;
 
-                    for (int i = 0; i <= sampleSize; i++) {
-                        glm::vec3 currPos = lightZeroPos + (float)i * x_step;
+                    for (int i = 0; i < sampleSize; i++) {
 
-                        // linear interpolation
-                        glm::vec3 currColor = ((1 - i * alpha) * lightZeroColor + (i * alpha) * lightOneColor);
+                        // random sampling by adding jittering to each step
+                        float e = std::rand() % 100 / (float)100;
+                        float new_alpha = (float)(i + e) * alpha;
 
+                        //Calculating the final position of each point
+                        glm::vec3 currPos = lightZeroPos + ((float)i + e) * x_step;
+
+                        // linear interpolation to calculate its color
+                        glm::vec3 currColor = ((1 - new_alpha) * lightZeroColor + (new_alpha)*lightOneColor);
+
+                        //We create a new PointLight var in order to be able to reuse the functions we have already implemented for the PointLight sources eariler in the assignment
                         PointLight currPointLight = { currPos, currColor };
 
                         // SOFT SHADOWS - treat each step light as point light
@@ -303,7 +344,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                             finalColor += (currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray) * alpha);
 
                             // debug ray: segment lights
-                            // drawing all the sampled rays that hit the ligth with their color
+                            // drawing all the sampled rays that hit the light with their color
                             if (debugAreaLights) {
                                 Ray tempLightRay;
                                 tempLightRay.origin = currPos;
@@ -338,37 +379,54 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                     int sampleSize = 10;
                     float alpha = 0.1f;
 
+
+                    //Calculating the three vertices of the parallelogram
                     glm::vec3 vertexZero = parallelogramlight.v0; // v0
                     glm::vec3 vertexOne = vertexZero + parallelogramlight.edge01; // vo + v1
                     glm::vec3 vertexTwo = vertexZero + parallelogramlight.edge02; // vo + v2
 
+                    //Assigning the values of each endpoint to another variables for easuer implementation
                     glm::vec3 colorZero = parallelogramlight.color0;
                     glm::vec3 colorOne = parallelogramlight.color1;
                     glm::vec3 colorTwo = parallelogramlight.color2;
                     glm::vec3 colorThree = parallelogramlight.color3;
 
+
+                    //Calculate the steps in the 'x' and 'y' axis of the parallelogram 
+                    // we will add the jittering in the next part, right now we assume equal distances
                     glm::vec3 x_step = (vertexOne - vertexZero) / (float)sampleSize;
                     glm::vec3 y_step = (vertexTwo - vertexZero) / (float)sampleSize;
 
                     // bilinear interpolation
                     // f(0,0)(1-x)(1-y) + f(0,1)(1-x)y + f(1,0) x(1-y) + f(1,1)xy
-                    for (int i = 0; i <= sampleSize; i++) {
-                        for (int j = 0; j <= sampleSize; j++) {
+                    for (int i = 0; i < sampleSize; i++) {
+                        for (int j = 0; j < sampleSize; j++) {
 
+                            // random sampling by adding jittering for each sample
+                            float e = std::rand() % 100 / (float)100;
+                            float new_alpha_x = (float)(i + e) * alpha;
+                            float new_alpha_y = (float)(j + e) * alpha;
+
+                            // https://blogs.sas.com/content/iml/2020/05/18/what-is-bilinear-interpolation.html#:~:text=Bilinear%20interpolation%20is%20a%20weighted,four%20corners%20of%20the%20rectangle.&text=Given%20a%20rectangle%20with%20lower,y0)%2F(y1%2Dy0)
+                            //using bileaner interpolation and our new data we calclulate the new values for the colour of the sample light
                             glm::vec3 currColor{ 0.f };
-                            currColor += (colorZero * (1 - i * alpha) * (1 - j * alpha));
-                            currColor += (colorTwo * (1 - i * alpha) * (j * alpha));
-                            currColor += (colorOne * (i * alpha) * (1 - j * alpha));
-                            currColor += (colorThree * (i * alpha) * (j * alpha));
+                            currColor += (colorZero * (1 - new_alpha_x) * (1 - new_alpha_y));
+                            currColor += (colorTwo * (1 - new_alpha_x) * (new_alpha_y));
+                            currColor += (colorOne * (new_alpha_x) * (1 - new_alpha_y));
+                            currColor += (colorThree * (new_alpha_x) * (new_alpha_y));
 
-                            // before we average, we save the color to show in debug ray
+                            // before we averrage, we save the color to show in debug ray
                             glm::vec3 debugRayColor = currColor;
 
+                            //We average out all the samples
                             currColor *= (alpha * alpha);
 
-                            glm::vec3 currPos = vertexZero + ((float)i * x_step + (float)j * y_step);
+                            //Calculating the new initial position of the sample
+                            glm::vec3 currPos = vertexZero + (((float)i + e) * x_step + ((float)j + e) * y_step);
+                            //And then create a point light source and we apply once more the same functions we implemented during the point light
                             PointLight currPointLight = { currPos, currColor };
 
+                            //Again using hard shadows for each of the point light source -> soft shadows
                             if (hitLightSuccess(bvh, ray, currPointLight.position)) {
                                 finalColor += currPointLight.color * calculateDiffuse(currPointLight, hitInfo, ray);
                                 finalColor += currPointLight.color * calculateSpecular(currPointLight, hitInfo, ray);
@@ -407,6 +465,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
             // drawing the camera ray using the final color
             drawRay(ray, finalColor);
 
+
             // everytime the ray intersects a specular surface, trace another ray in the mirror-reflection direction
             float epsilon = (float)1E-6;
             if (glm::length(hitInfo.material.ks) > epsilon && level < maxLevel) {
@@ -418,59 +477,52 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                 glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
                 Ray reflectedRay = { intersectionPoint,  reflectedVector };
 
-                finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel));
+                HitInfo hitInfo1;
+                finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel, hitInfo1));
             }
+            if (debugTransparency) {
+                float transparency = hitInfo.material.transparency;
+                if (transparency < 1) {
+                    float background = 1 - transparency;
+                    glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
+                    Ray secondRay = { intersectionPoint, ray.direction };
 
-            if (debugBloomFilter) {
-
+                    HitInfo hitInfo1;
+                    glm::vec3 backgroundColor = recursive_ray_tracer(scene, bvh, secondRay, level + 1, maxLevel, hitInfo1);
+                    glm::vec3 oldFinalColor = finalColor;
+                    finalColor = transparency * oldFinalColor + background * backgroundColor;
+                }
             }
         }
-
         return finalColor;
     }
     else {
         // Draw a red debug ray if the ray missed.
         drawRay(ray, glm::vec3(1.0f, 0.0f, 0.0f));
+
         // Set the color of the pixel to black if the ray misses.
         return glm::vec3(0.0f);
     }
 }
 
+/// <summary>
+/// This funcition is called in order to calculate the color of each pixel in our scene. 
+/// By using the function above recursively we can calculate the final colour
+/// </summary>
+/// <param name="scene"></param>
+/// <param name="bvh"></param>
+/// <param name="ray"></param>
+/// <returns></returns>
 static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy& bvh, Ray ray)
 {
     int startLevel = 0;
     int maxLevel = 6;
-    return recursive_ray_tracer(scene, bvh, ray, startLevel, maxLevel);
-
-    // Lights are stored in a single array (scene.lights) where each item can be either a PointLight, SegmentLight or ParallelogramLight.
-    // You can check whether a light at index i is a PointLight using std::holds_alternative:
-    // std::holds_alternative<PointLight>(scene.lights[i])
-    //
-    // If it is indeed a point light, you can "convert" it to the correct type using std::get:
-    // PointLight pointLight = std::get<PointLight>(scene.lights[i]);
-    //
-    //
-    // The code to iterate over the lights thus looks like this:
-    // for (const auto& light : scene.lights) {
-    //     if (std::holds_alternative<PointLight>(light)) {
-    //         const PointLight pointLight = std::get<PointLight>(light);
-    //         // Perform your calculations for a point light.
-    //     } else if (std::holds_alternative<SegmentLight>(light)) {
-    //         const SegmentLight segmentLight = std::get<SegmentLight>(light);
-    //         // Perform your calculations for a segment light.
-    //     } else if (std::holds_alternative<ParallelogramLight>(light)) {
-    //         const ParallelogramLight parallelogramLight = std::get<ParallelogramLight>(light);
-    //         // Perform your calculations for a parallelogram light.
-    //     }
-    // }
-    //
-    // Regarding the soft shadows for **other** light sources **extra** feature:
-    // To add a new light source, define your new light struct in scene.h and modify the Scene struct (also in scene.h)
-    // by adding your new custom light type to the lights std::variant. For example:
-    // std::vector<std::variant<PointLight, SegmentLight, ParallelogramLight, MyCustomLightType>> lights;
-    //
-    // You can add the light sources programmatically by creating a custom scene (modify the Custom case in the
-    // loadScene function in scene.cpp). Custom lights will not be visible in rasterization view.
+    HitInfo hitInfo;
+    glm::vec3 finalColour = recursive_ray_tracer(scene, bvh, ray, startLevel, maxLevel, hitInfo);
+    if (debugIntersectionAABB) {
+        drawDebugTriangle(hitInfo);
+    }
+    return finalColour;
 }
 
 // box Filter which averages the pixel based on its neighbouring pixels
@@ -718,8 +770,10 @@ int main(int argc, char** argv)
             ImGui::Checkbox("Draw Area Lights", &debugAreaLights);
             ImGui::Checkbox("Draw BVH", &debugBVH);
 
-            if (debugBVH)
+            if (debugBVH) {
                 ImGui::SliderInt("BVH Level", &bvhDebugLevel, 0, bvh.numLevels() - 1);
+                ImGui::Checkbox("Draw triangles inside leaf nodes", &drawTrianglesInLeaf);
+            }
 
             ImGui::Checkbox("Draw Intersected But Not Visited Modes", &debugIntersectionAABB);
             ImGui::Checkbox("Draw Interpolated Normals", &debugNormalInterpolation);
@@ -730,6 +784,7 @@ int main(int argc, char** argv)
                 ImGui::SliderInt("Reduce resolution by X times X", &mipmappingReduceResolution, 2, 10);
             }
             ImGui::Checkbox("Bloom Filter", &debugBloomFilter);
+            ImGui::Checkbox("Transparency", &debugTransparency);
 
         }
 
@@ -842,7 +897,11 @@ int main(int argc, char** argv)
         switch (viewMode) {
         case ViewMode::Rasterization: {
             glPushAttrib(GL_ALL_ATTRIB_BITS);
-            drawSceneOpenGL(scene);
+
+            if (debugIntersectionAABB == false && drawTrianglesInLeaf == false) {
+                drawSceneOpenGL(scene);
+            }
+
             if (optDebugRay) {
                 // Call getFinalColor for the debug ray. Ignore the result but tell the function that it should
                 // draw the rays instead.
@@ -852,6 +911,7 @@ int main(int argc, char** argv)
             }
             glPopAttrib();
         } break;
+
         case ViewMode::RayTracing: {
             screen.clear(glm::vec3(0.0f));
             renderRayTracing(scene, camera, bvh, screen);
