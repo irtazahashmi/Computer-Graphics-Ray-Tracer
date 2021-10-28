@@ -42,6 +42,8 @@ bool debugIntersectionAABB{ false };
 bool debugNormalInterpolation{ false };
 bool debugTextures{ false };
 bool debugBloomFilter{ false };
+float debugBloomfilterThreshold = 0;
+int debugBloomfilterSize = 0;
 
 enum class ViewMode {
     Rasterization = 0,
@@ -540,7 +542,7 @@ static void renderRayTracing(const Scene& scene, const Trackball& camera, const 
                 if (debugBloomFilter) {
                     glm::vec3 colour = screen.getPixel(x, y);
                     // add the pixel to the threshold if it has a certain value
-                    if (colour.x > 0.5f || colour.y > 0.5f || colour.z > 0.5f) {
+                    if (colour.x > debugBloomfilterThreshold || colour.y > debugBloomfilterThreshold || colour.z > debugBloomfilterThreshold) {
                         threshold.setPixel(x, y, colour);
                     }
                     else {
@@ -552,7 +554,7 @@ static void renderRayTracing(const Scene& scene, const Trackball& camera, const 
     });
     if (debugBloomFilter) {
         // box filter
-        threshold = GeneralFilter(threshold, 10);
+        threshold = GeneralFilter(threshold, debugBloomfilterSize);
 
         // add the new pixels to the original
         tbb::parallel_for(windowRange, [&](tbb::blocked_range2d<int, int> localRange) {
@@ -675,6 +677,10 @@ int main(int argc, char** argv)
             ImGui::Checkbox("Add Texture", &debugTextures);
             ImGui::Checkbox("Bloom Filter", &debugBloomFilter);
 
+            if (debugBloomFilter) {
+                ImGui::SliderFloat("Threshold", &debugBloomfilterThreshold, 0.0f, 1.0f);
+                ImGui::SliderInt("Filter Size", &debugBloomfilterSize, 0, 100);
+            }
         }
 
         ImGui::Spacing();
