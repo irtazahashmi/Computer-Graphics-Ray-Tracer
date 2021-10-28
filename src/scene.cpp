@@ -80,11 +80,11 @@ Scene loadScene(SceneType type, const std::filesystem::path& dataDir)
         scene.spheres.push_back(Sphere { glm::vec3(3.0f, -2.0f, 10.2f), 1.0f, Material { glm::vec3(0.8f, 0.2f, 0.2f) } });
         scene.spheres.push_back(Sphere { glm::vec3(-2.0f, 2.0f, 4.0f), 2.0f, Material { glm::vec3(0.6f, 0.8f, 0.2f) } });
         scene.spheres.push_back(Sphere { glm::vec3(0.0f, 0.0f, 6.0f), 0.75f, Material { glm::vec3(0.2f, 0.2f, 0.8f) } });
-        scene.lights.push_back(PointLight { glm::vec3(3, 0, 3), glm::vec3(15) });
+        scene.lights.push_back(PointLight { glm::vec3(3, 0, 3), glm::vec3(1) });
     } break;
     case Custom: {
         // === Replace custom.obj by your own 3D model (or call your 3D model custom.obj) ===
-        auto subMeshes = loadMesh(dataDir / "quad.obj");
+        auto subMeshes = loadMesh(dataDir / "quad_transparent.obj");
         std::move(std::begin(subMeshes), std::end(subMeshes), std::back_inserter(scene.meshes));
         // === CHANGE THE LIGHTING IF DESIRED ===
         scene.lights.push_back(PointLight { glm::vec3(-1, 1, -1), glm::vec3(1) });

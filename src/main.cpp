@@ -41,6 +41,7 @@ bool debugAreaLights = { false };
 bool debugIntersectionAABB{ false };
 bool debugNormalInterpolation{ false };
 bool debugTextures{ false };
+bool debugTransparency{ false };
 bool drawTrianglesInLeaf{ false };
 
 enum class ViewMode {
@@ -282,7 +283,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                     const PointLight pointlight = std::get<PointLight>(light);
 
                     // Hard shdow - if the point is in light, calculate color, else in shadow.
-                    if (hitLightSuccess(bvh, ray, pointlight.position)) {
+                    if (hitLightSuccess(bvh, ray, pointlight.position) || debugTransparency) {
                         finalColor += pointlight.color * calculateDiffuse(pointlight, hitInfo, ray);
                         finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
                     }
@@ -469,16 +470,30 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
 
                 glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
                 Ray reflectedRay = { intersectionPoint,  reflectedVector };
+
                 HitInfo hitInfo1;
-                finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel,hitInfo1));
+                finalColor += hitInfo.material.ks * (recursive_ray_tracer(scene, bvh, reflectedRay, level + 1, maxLevel, hitInfo1));
+            }
+            if (debugTransparency) {
+                float transparency = hitInfo.material.transparency;
+                if (transparency < 1) {
+                    float background = 1 - transparency;
+                    glm::vec3 intersectionPoint = ray.origin + ray.direction * ray.t;
+                    Ray secondRay = { intersectionPoint, ray.direction };
+
+                    HitInfo hitInfo1;
+                    glm::vec3 backgroundColor = recursive_ray_tracer(scene, bvh, secondRay, level + 1, maxLevel, hitInfo1);
+                    glm::vec3 oldFinalColor = finalColor;
+                    finalColor = transparency * oldFinalColor + background * backgroundColor;
+                }
             }
         }
-
         return finalColor;
     }
     else {
         // Draw a red debug ray if the ray missed.
         drawRay(ray, glm::vec3(1.0f, 0.0f, 0.0f));
+
         // Set the color of the pixel to black if the ray misses.
         return glm::vec3(0.0f);
     }
@@ -642,6 +657,8 @@ int main(int argc, char** argv)
             ImGui::Checkbox("Draw Intersected But Not Visited Modes", &debugIntersectionAABB);
             ImGui::Checkbox("Draw Interpolated Normals", &debugNormalInterpolation);
             ImGui::Checkbox("Add Texture", &debugTextures);
+            ImGui::Checkbox("Transparency", &debugTransparency);
+
         }
 
         ImGui::Spacing();
