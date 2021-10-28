@@ -288,7 +288,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
                     const PointLight pointlight = std::get<PointLight>(light);
 
                     // Hard shdow - if the point is in light, calculate color, else in shadow.
-                    if (hitLightSuccess(bvh, ray, pointlight.position) || debugTransparency) {
+                    if (hitLightSuccess(bvh, ray, pointlight.position)) {
                         finalColor += pointlight.color * calculateDiffuse(pointlight, hitInfo, ray);
                         finalColor += pointlight.color * calculateSpecular(pointlight, hitInfo, ray);
                     }
@@ -468,7 +468,7 @@ static glm::vec3 recursive_ray_tracer(const Scene& scene, const BoundingVolumeHi
 
             // everytime the ray intersects a specular surface, trace another ray in the mirror-reflection direction
             float epsilon = (float)1E-6;
-            if (glm::length(hitInfo.material.ks) > epsilon && level < maxLevel) {
+            if ((glm::length(hitInfo.material.ks) > epsilon || debugTransparency) && level < maxLevel) {
 
                 glm::vec3 hitNormal = glm::normalize(hitInfo.normal);
                 glm::vec3 reflectedVector = 2 * glm::dot(-ray.direction, hitNormal) * hitNormal + ray.direction;

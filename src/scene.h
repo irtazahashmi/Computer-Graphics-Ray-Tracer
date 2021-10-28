@@ -23,6 +23,7 @@ enum SceneType {
     Spheres,
     //Mixed,
     Custom,
+    Custom2,
     Dragon2,
 };
 
