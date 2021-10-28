@@ -4,13 +4,22 @@
 #include <array>
 #include <span>
 
+/// <summary>
+/// Declare few external boolean that we will need them inside the bounding_volume_hierarchy.cpp 
+/// for debug purposes but they were declared in the main.cpp
+/// </summary>
 extern bool debugIntersectionAABB;
+extern bool drawTrianglesInLeaf;
 
+/// <summary>
+/// The struct of a single node of our binary tree
+/// </summary>
 struct Node {
-    AxisAlignedBox data;
-    bool isLeaf;
-    int level;
-    std::vector <int> indices;
+    AxisAlignedBox data; //Here we store the upper and lower point of our axis-aligned-box
+    bool isLeaf; //Boolean to indicate whether the node is a leaf or not
+    int level; // The level (depth) of our node
+    std::vector <int> indices; //The vector in case of leaf contains the indices of the triangles that are inside the corresponding box
+                                //in case of an inside node we store the indices of the left and right child inside the binary tree structure
 };
 
 
@@ -41,21 +50,35 @@ struct BvhComparatorZ {
     }
 };
 
+/// <summary>
+/// New structure just to be used in the next function when we  will need to use 
+/// priority queue in a tuple (see next function)
+/// </summary>
+struct AABBwithIntersection {
+    //t the value for the ray for which it intersects with the box that is stored 
+    //the binary tree at [index]
+    float t;
+    int index;
+    //Default constructor
+    AABBwithIntersection(float tin, int indx) : t(tin), index(indx) {}
+    //Operator we are going to use when adding elements in the pq
+    bool operator<(const struct AABBwithIntersection& other) const
+    {
+        return t > other.t;
+    }
+};
+
+/// <summary>
+/// Decleration of the class and its methods / constructor.
+/// More in depth explanation for each of these functions can be found in the bounding_volume_hierarchy.cpp
+/// </summary>
 class BoundingVolumeHierarchy {
 public:
     BoundingVolumeHierarchy(Scene* pScene);
-
-    // Implement these two functions for the Visual Debug.
-    // The first function should return how many levels there are in the tree that you have constructed.
-    // The second function should draw the bounding boxes of the nodes at the selected level.
     int numLevels() const;
     void debugDraw(int level);
-
-    // Return true if something is hit, returns false otherwise.
-    // Only find hits if they are closer than t stored in the ray and the intersection
-    // is on the correct side of the origin (the new t >= 0).
     bool intersect(Ray& ray, HitInfo& hitInfo) const;
-
 private:
     Scene* m_pScene;
+    
 };
