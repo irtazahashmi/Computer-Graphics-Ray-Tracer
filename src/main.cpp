@@ -43,7 +43,7 @@ bool debugNormalInterpolation{ false };
 bool debugTextures{ false };
 bool debugBloomFilter{ false };
 float debugBloomfilterThreshold = 0;
-int debugBloomfilterSize = 0;
+int debugBloomfilterSize = 1;
 bool debugMipmapping{ false };
 bool debugTransparency{ false };
 bool drawTrianglesInLeaf{ false };
@@ -790,7 +790,7 @@ int main(int argc, char** argv)
 
             if (debugBloomFilter) {
                 ImGui::SliderFloat("Threshold", &debugBloomfilterThreshold, 0.0f, 1.0f);
-                ImGui::SliderInt("Filter Size", &debugBloomfilterSize, 0, 100);
+                ImGui::SliderInt("Filter Size", &debugBloomfilterSize, 1, 100);
             }
         }
 
