@@ -727,7 +727,7 @@ int main(int argc, char** argv)
         ImGui::Begin("Final Project");
         {
             constexpr std::array items { "SingleTriangle", "Cube (segment light)", "Cornell Box (with mirror)", 
-                "Cornell Box (parallelogram light and mirror)", "Monkey", "Teapot", "Dragon", /* "AABBs",*/ "Spheres", /*"Mixed",*/ "Custom", "Dragon2"};
+                "Cornell Box (parallelogram light and mirror)", "Monkey", "Teapot", "Dragon", /* "AABBs",*/ "Spheres", /*"Mixed",*/ "Quad", "Custom", "Custom2", "Dragon2"};
             if (ImGui::Combo("Scenes", reinterpret_cast<int*>(&sceneType), items.data(), int(items.size()))) {
                 optDebugRay.reset();
                 scene = loadScene(sceneType, dataPath);

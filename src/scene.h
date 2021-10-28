@@ -22,6 +22,7 @@ enum SceneType {
     //AABBs,
     Spheres,
     //Mixed,
+    Quad,
     Custom,
     Custom2,
     Dragon2,

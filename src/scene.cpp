@@ -82,6 +82,15 @@ Scene loadScene(SceneType type, const std::filesystem::path& dataDir)
         scene.spheres.push_back(Sphere { glm::vec3(0.0f, 0.0f, 6.0f), 0.75f, Material { glm::vec3(0.2f, 0.2f, 0.8f) } });
         scene.lights.push_back(PointLight { glm::vec3(3, 0, 3), glm::vec3(1) });
     } break;
+    case Quad: {
+        // === Replace custom.obj by your own 3D model (or call your 3D model custom.obj) ===
+        auto subMeshes = loadMesh(dataDir / "quad.obj");
+        std::move(std::begin(subMeshes), std::end(subMeshes), std::back_inserter(scene.meshes));
+        // === CHANGE THE LIGHTING IF DESIRED ===
+        scene.lights.push_back(PointLight{ glm::vec3(-1, 1, -1), glm::vec3(1) });
+        // Spherical light: position, radius, color
+        //scene.lights.push_back(SphericalLight{ glm::vec3(0, 1.5f, 0), 0.2f, glm::vec3(1) });
+    } break;
     case Custom: {
         // === Replace custom.obj by your own 3D model (or call your 3D model custom.obj) ===
         auto subMeshes = loadMesh(dataDir / "quad_transparent.obj");
@@ -100,7 +109,7 @@ Scene loadScene(SceneType type, const std::filesystem::path& dataDir)
         // Spherical light: position, radius, color
         //scene.lights.push_back(SphericalLight{ glm::vec3(0, 1.5f, 0), 0.2f, glm::vec3(1) });
     } break;
-};
+    };
 
     return scene;
 }
