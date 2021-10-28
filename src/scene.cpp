@@ -91,7 +91,6 @@ Scene loadScene(SceneType type, const std::filesystem::path& dataDir)
         // Spherical light: position, radius, color
         //scene.lights.push_back(SphericalLight{ glm::vec3(0, 1.5f, 0), 0.2f, glm::vec3(1) });
     } break;
-    };
     case Custom2: {
         // === Replace custom.obj by your own 3D model (or call your 3D model custom.obj) ===
         auto subMeshes = loadMesh(dataDir / "tile_scene.obj");
