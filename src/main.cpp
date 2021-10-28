@@ -41,6 +41,9 @@ bool debugAreaLights = { false };
 bool debugIntersectionAABB{ false };
 bool debugNormalInterpolation{ false };
 bool debugTextures{ false };
+bool debugBloomFilter{ false };
+float debugBloomfilterThreshold = 0;
+int debugBloomfilterSize = 0;
 bool debugTransparency{ false };
 bool drawTrianglesInLeaf{ false };
 
@@ -520,6 +523,36 @@ static glm::vec3 getFinalColor(const Scene& scene, const BoundingVolumeHierarchy
     return finalColour;
 }
 
+// box Filter which averages the pixel based on its neighbouring pixels
+glm::vec3 boxFilter(Screen& source, int i, int j, int filterSize) {
+    // filterSize cannot be smaller than 1
+    filterSize = glm::max(1, filterSize);
+    glm::vec3 sum{ 0.0f };
+
+    // sum and average the surrounding pixels based on the filterSize
+    for (int x = -filterSize; x < filterSize + 1; ++x) {
+        for (int y = -filterSize; y < filterSize + 1; ++y) {
+            sum += source.getPixel(i + x, j + y);
+        }
+    }
+    sum /= (2 * filterSize + 1) * (2 * filterSize + 1);
+    
+    // return new averaged pixel
+    return sum;
+}
+
+// filter that goes through all the pixels in the screen, based on the filterSize
+Screen GeneralFilter(Screen& source, int filterSize) {
+    Screen result(windowResolution);
+    for (int i = filterSize; i < windowResolution.x - filterSize; ++i) {
+        for (int j = filterSize; j < windowResolution.y - filterSize; ++j) {
+            // call boxFilter for new colour of the pixel
+            result.setPixel(i, j, boxFilter(source, i, j, filterSize));
+        }
+    }
+    return result;
+}
+
 static void setOpenGLMatrices(const Trackball& camera);
 static void drawLightsOpenGL(const Scene& scene, const Trackball& camera, int selectedLight);
 static void drawSceneOpenGL(const Scene& scene);
@@ -542,6 +575,10 @@ static void renderRayTracing(const Scene& scene, const Trackball& camera, const 
     }
 #else
     // Multi-threaded in release mode
+
+    // create new screen to store the thresholded values
+    Screen threshold{ windowResolution };
+
     const tbb::blocked_range2d<int, int> windowRange { 0, windowResolution.y, 0, windowResolution.x };
     tbb::parallel_for(windowRange, [&](tbb::blocked_range2d<int, int> localRange) {
         for (int y = std::begin(localRange.rows()); y != std::end(localRange.rows()); y++) {
@@ -553,9 +590,43 @@ static void renderRayTracing(const Scene& scene, const Trackball& camera, const 
                 };
                 const Ray cameraRay = camera.generateRay(normalizedPixelPos);
                 screen.setPixel(x, y, getFinalColor(scene, bvh, cameraRay));
+
+                if (debugBloomFilter) {
+                    glm::vec3 colour = screen.getPixel(x, y);
+                    // add the pixel to the threshold if it has a certain value
+                    if (colour.x > debugBloomfilterThreshold || colour.y > debugBloomfilterThreshold || colour.z > debugBloomfilterThreshold) {
+                        threshold.setPixel(x, y, colour);
+                    }
+                    else {
+                        threshold.setPixel(x, y, glm::vec3{ 0.0f });
+                    }
+                }
             }
         }
     });
+    if (debugBloomFilter) {
+        // box filter
+        threshold = GeneralFilter(threshold, debugBloomfilterSize);
+
+        // add the new pixels to the original
+        tbb::parallel_for(windowRange, [&](tbb::blocked_range2d<int, int> localRange) {
+            for (int y = std::begin(localRange.rows()); y != std::end(localRange.rows()); y++) {
+                for (int x = std::begin(localRange.cols()); x != std::end(localRange.cols()); x++) {
+                    // NOTE: (-1, -1) at the bottom left of the screen, (+1, +1) at the top right of the screen.
+                    const glm::vec2 normalizedPixelPos{
+                        float(x) / windowResolution.x * 2.0f - 1.0f,
+                        float(y) / windowResolution.y * 2.0f - 1.0f
+                    };
+                    glm::vec3 newColour = screen.getPixel(x, y) + 1.0f * threshold.getPixel(x, y);
+                    screen.setPixel(x, y, newColour);
+                }
+            }
+        });
+    }
+    // TODO
+    // slider for threshold
+    // slider for filterSize
+
 #endif
 }
 
@@ -658,8 +729,13 @@ int main(int argc, char** argv)
             ImGui::Checkbox("Draw Intersected But Not Visited Modes", &debugIntersectionAABB);
             ImGui::Checkbox("Draw Interpolated Normals", &debugNormalInterpolation);
             ImGui::Checkbox("Add Texture", &debugTextures);
+            ImGui::Checkbox("Bloom Filter", &debugBloomFilter);
             ImGui::Checkbox("Transparency", &debugTransparency);
 
+            if (debugBloomFilter) {
+                ImGui::SliderFloat("Threshold", &debugBloomfilterThreshold, 0.0f, 1.0f);
+                ImGui::SliderInt("Filter Size", &debugBloomfilterSize, 0, 100);
+            }
         }
 
         ImGui::Spacing();
