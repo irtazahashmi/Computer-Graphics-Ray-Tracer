@@ -591,6 +591,7 @@ Screen GeneralFilter(Screen& source, int filterSize) {
             return source;
         }        
     }
+    return source;
 }
 
 
