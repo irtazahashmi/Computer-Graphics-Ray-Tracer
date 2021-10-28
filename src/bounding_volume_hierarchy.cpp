@@ -335,7 +335,7 @@ bool BoundingVolumeHierarchy::intersect(Ray& ray, HitInfo& hitInfo) const
                     Vertex v2 = get<2>(triangles[binary_tree[current_index].indices[i]]);
                     //If there is a closer intersection of our ray with a triangle we update the hitinfo and the hit boolean
                     if (intersectRayWithTriangle(v0.position, v1.position, v2.position, ray, hitInfo)) {
-                        hitInfo.material = get<3>(triangles[i]);
+                        hitInfo.material = get<3>(triangles[binary_tree[current_index].indices[i]]);
                         hit = true;
                         hitInfo.v0 = v0;
                         hitInfo.v1 = v1;
