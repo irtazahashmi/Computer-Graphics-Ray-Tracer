@@ -24,6 +24,10 @@ Screen::Screen(const glm::ivec2& resolution)
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+glm::ivec2 Screen::getResolution(){
+    return m_resolution;
+}
+
 void Screen::clear(const glm::vec3& color)
 {
     std::fill(std::begin(m_textureData), std::end(m_textureData), color);
@@ -35,6 +39,11 @@ void Screen::setPixel(int x, int y, const glm::vec3& color)
     // OpenGL / stbi like the origin / (-1,-1) to be at the TOP left corner so transform the y coordinate.
     const int i = (m_resolution.y - 1 - y) * m_resolution.x + x;
     m_textureData[i] = glm::vec4(color, 1.0f);
+}
+
+glm::vec3 Screen::getPixel(int x, int y) {
+    const int i = (m_resolution.y - 1 - y) * m_resolution.x + x;
+    return m_textureData[i];
 }
 
 void Screen::writeBitmapToFile(const std::filesystem::path& filePath)

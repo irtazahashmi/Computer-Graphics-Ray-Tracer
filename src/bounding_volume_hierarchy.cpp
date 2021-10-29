@@ -6,16 +6,39 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
-#include <tuple> // for tuple
+#include <tuple> 
 #include <queue>
+#include <framework/disable_all_warnings.h>
+DISABLE_WARNINGS_PUSH()
+#include <imgui.h>
+#include <nfd.h>
+#include <tbb/blocked_range2d.h>
+#include <tbb/parallel_for.h>
+DISABLE_WARNINGS_POP()
+#include <chrono>
+#include <cstdlib>
+#include <filesystem>
+#include <framework/image.h>
+#include <framework/imguizmo.h>
+#include <framework/trackball.h>
+#include <framework/variant_helper.h>
+#include <framework/window.h>
+#include <fstream>
 #include <iostream>
+#include <optional>
+#include <random>
+#include <string>
+#include <type_traits>
+#include <variant>
 //Declare the binary tree as a global variable, where we are going to store all the information about the bvh for each node
 std::vector<Node> binary_tree;
 
+//In this data structure we will store information for all the triangles in each scene from all the meshes
 std::vector<std::tuple<Vertex, Vertex, Vertex, Material>> triangles;
 
 // max bvh level
 const int MAX_LEVEL = 10;
+
 
 /// <summary>
 /// This function splits the triangles from the parent node, into two vectors 
@@ -157,7 +180,7 @@ void recursiveStepBvh(int index_parent_node, int level, int max_level) {
         if (level % 3 == 2) {
             splitAxis = 'z';
         }
-
+        
         //Calling the splitBox function, split the triangles indices into two vectors according their position and the split axis
         splitBox(index_parent_node, splitAxis, leftVector, rightVector);
 
@@ -253,36 +276,52 @@ int BoundingVolumeHierarchy::numLevels() const
     return MAX_LEVEL + 1;
 }
 
+/// <summary>
+/// Function that takes a hitbox as parameter and draws out the triangle.
+/// Important note here, is that in order to avoid errors, when we are using this
+/// feature of the visual debugger we disable the restorization of the scene so we only paint 
+/// the triangles that we need
+/// </summary>
+/// <param name="hitInfo"></param>
+static void drawTriangle(Vertex v0, Vertex v1, Vertex v2, glm::vec3 colour) {
+    glBegin(GL_TRIANGLES);
+    //Set the colour of the triangle to the random colour that we have calculated before we call this function
+    glColor3f(colour.x, colour.y, colour.z);
+    //Assign the values of the three vertices
+    glVertex3f(v0.position.x, v0.position.y, v0.position.z);
+    glVertex3f(v1.position.x, v1.position.y, v1.position.z);
+    glVertex3f(v2.position.x, v2.position.y, v2.position.z);
+    //Draw the triangle
+    glEnd();
+}
+
 // Use this function to visualize your BVH. This can be useful for debugging. Use the functions in
 // draw.h to draw the various shapes. We have extended the AABB draw functions to support wireframe
 // mode, arbitrary colors and transparency.
 void BoundingVolumeHierarchy::debugDraw(int level)
 {
+    //For every node in the binary tree (bvh) we check if its level is the level that is given
     for (Node node : binary_tree) {
         AxisAlignedBox aabb{ node.data };
         if (node.level == level) {
+            //if so we draw the Axis Aligned box
             drawAABB(aabb, DrawMode::Wireframe, glm::vec3(1.0f));
+        }
+        //Also here is implemented the feature of the visual debugger that paints all the triangles within each leaf node a rrandom colour
+        if (node.isLeaf && drawTrianglesInLeaf) {
+            //If the node is a leaf, and the feature is selected we calclulate a random RGB value using the rand() function
+            //from the standard main library
+            glm::vec3 randomColour{ (std::rand() % 100) / 100.0f,(std::rand() % 100) / 100.0f ,(std::rand() % 100) / 100.0f };
+            //Now for all the triangles inside our leaf we paint them that colour
+            for (int i = 0; i < node.indices.size(); i++) {
+                Vertex v0 = get<0>(triangles[node.indices[i]]);
+                Vertex v1 = get<1>(triangles[node.indices[i]]);
+                Vertex v2 = get<2>(triangles[node.indices[i]]);
+                drawTriangle(v0, v1, v2, randomColour);
+            }
         }
     }
 }
-
-/// <summary>
-/// New structure just to be used in the next function when we  will need to use 
-/// priority queue in a tuple (see next function)
-/// </summary>
-struct AABBwithIntersection {
-    //t the value for the ray for which it intersects with the box that is stored 
-    //the binary tree at [index]
-    float t;
-    int index;
-    //Default constructor
-    AABBwithIntersection(float tin, int indx) : t(tin), index(indx) {}
-    //Operator we are going to use when adding elements in the pq
-    bool operator<(const struct AABBwithIntersection& other) const
-    {
-        return t < other.t;
-    }
-};
 
 
 /// <summary>
@@ -303,10 +342,11 @@ bool BoundingVolumeHierarchy::intersect(Ray& ray, HitInfo& hitInfo) const
     
     //The priority queue, where are we going to store all the visited (intersected) nodes (index and intersection point)
     std::priority_queue<AABBwithIntersection> pq;
+    std::priority_queue<AABBwithIntersection> pqLeaves;
 
     //Push the root into the pq
     pq.push(AABBwithIntersection(std::numeric_limits<float>::max(),0));
-
+    
     //Declare a tempT value which we are going to use when declaring new 'tuples' for our pq
     float tempT = pq.top().t;
 
@@ -314,9 +354,9 @@ bool BoundingVolumeHierarchy::intersect(Ray& ray, HitInfo& hitInfo) const
     if (intersectRayWithShape(binary_tree[0].data, ray, tempT)) {
         //While we have intersected AABBs that are not yet traversed we do the following
         while (pq.size() > 0) {
-            //Store the index of the first element of the queue
+            //Store the index and the t value of the first element of the queue
             int current_index = pq.top().index;
-
+            float t = pq.top().t;
             //Remove first element (parent node)
             pq.pop();
             
@@ -327,21 +367,8 @@ bool BoundingVolumeHierarchy::intersect(Ray& ray, HitInfo& hitInfo) const
 
             //If the node we are currently is a leaf then we check all the triangles
             if (binary_tree[current_index].isLeaf) {
-                //Iterate through all the triangle_indices that are stored in the leaf vector
-                for (int i = 0; i < binary_tree[current_index].indices.size(); i++) {
-                    //Get the info for all the vertices for each triangle
-                    Vertex v0 = get<0>(triangles[binary_tree[current_index].indices[i]]);
-                    Vertex v1 = get<1>(triangles[binary_tree[current_index].indices[i]]);
-                    Vertex v2 = get<2>(triangles[binary_tree[current_index].indices[i]]);
-                    //If there is a closer intersection of our ray with a triangle we update the hitinfo and the hit boolean
-                    if (intersectRayWithTriangle(v0.position, v1.position, v2.position, ray, hitInfo)) {
-                        hitInfo.material = get<3>(triangles[i]);
-                        hit = true;
-                        hitInfo.v0 = v0;
-                        hitInfo.v1 = v1;
-                        hitInfo.v2 = v2;
-                    }
-                }
+                //If the node is a leaf we push the info to the leaf priority queue
+                pqLeaves.push(AABBwithIntersection(t, current_index));
             }
             else {
                 tempT = std::numeric_limits<float>::max();
@@ -359,9 +386,43 @@ bool BoundingVolumeHierarchy::intersect(Ray& ray, HitInfo& hitInfo) const
             }
         }
     }
+    //Now we will check one-by-one starting from the top of the priority queue all the leaf nodes and their intersections
+    //The priority queue was created in a way to strore in the front the element wich is the closest to our ray.
+    //Important note is that here we observed that sometimes by stopping to the first node that has a hit with our ray
+    //sometimes doesnt work due to floating errors points and also the overlap of two or more boxes, so in order to
+    //pass that issue we allowed our loop to check the triangles of the node after the first hit so we can avoid errors when 
+    //it comes to ray tracing. Its a small price to pay for accuracy and precission
+    while (!pqLeaves.empty()) {
+        //Store the index and the t value of the first element of the queue
+        int current_index = pqLeaves.top().index;
+        float t = pqLeaves.top().t;
+        //We use this variable to allow us to check the node after the first hit to avoid errors of floating points etc
+        bool flag = false;
+        //Remove first element
+        pqLeaves.pop();
+        //Iterate thorugh all the triangles and update the info for the closest one
+        for (int i = 0; i < binary_tree[current_index].indices.size(); i++) {
+            //Get the info for all the vertices for each triangle
+            Vertex v0 = get<0>(triangles[binary_tree[current_index].indices[i]]);
+            Vertex v1 = get<1>(triangles[binary_tree[current_index].indices[i]]);
+            Vertex v2 = get<2>(triangles[binary_tree[current_index].indices[i]]);
+            //If there is a closer intersection of our ray with a triangle we update the hitinfo and the hit boolean
+            flag = hit;
+            if (intersectRayWithTriangle(v0.position, v1.position, v2.position, ray, hitInfo)) {
+                hitInfo.material = get<3>(triangles[binary_tree[current_index].indices[i]]);
+                hit = true;
+                hitInfo.v0 = v0;
+                hitInfo.v1 = v1;
+                hitInfo.v2 = v2;
+            }
+            //If in the previus node there was a hit we exit from the loop
+            if (flag) break;
+        }
+    }
      
     // Intersect with spheres.
     for (const auto& sphere : m_pScene->spheres)
         hit |= intersectRayWithShape(sphere, ray, hitInfo);
+    //return whether there was a hit of our ray with the scene
     return hit;
 }

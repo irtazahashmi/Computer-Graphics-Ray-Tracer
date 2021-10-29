@@ -10,9 +10,11 @@ DISABLE_WARNINGS_POP()
 class Screen {
 public:
     Screen(const glm::ivec2& resolution);
+    glm::ivec2 getResolution();
 
     void clear(const glm::vec3& color);
     void setPixel(int x, int y, const glm::vec3& color);
+    glm::vec3 getPixel(int x, int y);
 
     void writeBitmapToFile(const std::filesystem::path& filePath);
     void draw();
